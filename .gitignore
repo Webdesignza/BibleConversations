@@ -1,0 +1,40 @@
+# Virtual Environment
+venv/
+env/
+
+# Environment Variables (IMPORTANT - contains API keys!)
+.env
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# ChromaDB Database
+chroma_db/
+
+# Uploaded Files
+uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test files
+test_*.py

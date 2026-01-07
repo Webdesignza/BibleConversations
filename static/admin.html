@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - RAG FastAPI System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px 15px 0 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+        }
+
+        .content {
+            background: white;
+            padding: 40px;
+            border-radius: 0 0 15px 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            padding: 60px 20px;
+            text-align: center;
+            background: #f8f9ff;
+            transition: all 0.3s;
+            cursor: pointer;
+            margin-bottom: 30px;
+        }
+
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+            transform: translateY(-2px);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .upload-hint {
+            color: #666;
+            font-size: 14px;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 10px 5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status-box {
+            background: #f8f9ff;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .status-box.show {
+            display: block;
+        }
+
+        .status-box.success {
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .status-box.error {
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e5e7eb;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-bar.show {
+            display: block;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .back-link {
+            display: inline-block;
+            color: #667eea;
+            text-decoration: none;
+            margin-top: 20px;
+            transition: color 0.3s;
+        }
+
+        .back-link:hover {
+            color: #764ba2;
+        }
+
+        .file-list {
+            margin: 20px 0;
+        }
+
+        .file-item {
+            background: #f8f9ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .file-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .file-size {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .api-key-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        .api-key-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ Admin Panel</h1>
+            <p>Upload documents to your RAG knowledge base</p>
+        </div>
+
+        <div class="content">
+            <!-- API Key Input -->
+            <div>
+                <label for="apiKey"><strong>API Key:</strong></label>
+                <input 
+                    type="password" 
+                    id="apiKey" 
+                    class="api-key-input" 
+                    placeholder="Enter your API key"
+                >
+            </div>
+
+            <!-- Stats Section -->
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalChunks">-</div>
+                    <div class="stat-label">Total Chunks</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="embeddingModel">-</div>
+                    <div class="stat-label">Embedding Model</div>
+                </div>
+            </div>
+
+            <!-- Upload Area -->
+            <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">Drop files here or click to browse</div>
+                <div class="upload-hint">Supported: PDF, TXT, MD (Max 10MB)</div>
+            </div>
+
+            <input type="file" id="fileInput" accept=".pdf,.txt,.md" multiple>
+
+            <!-- Progress Bar -->
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+
+            <!-- File List -->
+            <div class="file-list" id="fileList"></div>
+
+            <!-- Status Box -->
+            <div class="status-box" id="statusBox"></div>
+
+            <!-- Actions -->
+            <div style="text-align: center;">
+                <button class="btn" onclick="refreshStats()">🔄 Refresh Stats</button>
+            </div>
+
+            <a href="/" class="back-link">← Back to Home</a>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000';
+        let selectedFiles = [];
+
+        // Get API key from input
+        function getApiKey() {
+            return document.getElementById('apiKey').value;
+        }
+
+        // Load stats on page load
+        window.addEventListener('load', refreshStats);
+
+        // Drag and drop handlers
+        const uploadArea = document.getElementById('uploadArea');
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        // File input handler
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        function handleFiles(files) {
+            selectedFiles = Array.from(files);
+            displayFileList();
+            uploadFiles();
+        }
+
+        function displayFileList() {
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = '<h3>Selected Files:</h3>';
+            
+            selectedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <div>
+                        <div class="file-name">📄 ${file.name}</div>
+                        <div class="file-size">${(file.size / 1024).toFixed(2)} KB</div>
+                    </div>
+                    <div id="status-${index}">⏳ Waiting...</div>
+                `;
+                fileList.appendChild(fileItem);
+            });
+        }
+
+        async function uploadFiles() {
+            const apiKey = getApiKey();
+            
+            if (!apiKey) {
+                showStatus('Please enter your API key', 'error');
+                return;
+            }
+
+            const progressBar = document.getElementById('progressBar');
+            const progressFill = document.getElementById('progressFill');
+            progressBar.classList.add('show');
+
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+                const statusElement = document.getElementById(`status-${i}`);
+                
+                try {
+                    statusElement.textContent = '⏳ Uploading...';
+                    
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    const response = await fetch(`${API_BASE}/api/documents/upload`, {
+                        method: 'POST',
+                        headers: {
+                            'X-API-Key': apiKey
+                        },
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        statusElement.textContent = `✅ ${result.num_chunks} chunks`;
+                        statusElement.style.color = '#10b981';
+                    } else {
+                        statusElement.textContent = '❌ Failed';
+                        statusElement.style.color = '#ef4444';
+                    }
+
+                } catch (error) {
+                    statusElement.textContent = '❌ Error';
+                    statusElement.style.color = '#ef4444';
+                }
+
+                // Update progress
+                const progress = ((i + 1) / selectedFiles.length * 100).toFixed(0);
+                progressFill.style.width = progress + '%';
+                progressFill.textContent = progress + '%';
+            }
+
+            showStatus('Upload complete! Refreshing stats...', 'success');
+            setTimeout(refreshStats, 1000);
+        }
+
+        async function refreshStats() {
+            const apiKey = getApiKey();
+            
+            if (!apiKey) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/documents/stats`, {
+                    headers: {
+                        'X-API-Key': apiKey
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('totalChunks').textContent = data.total_chunks || 0;
+                    document.getElementById('embeddingModel').textContent = 
+                        data.embedding_model ? data.embedding_model.split('-').pop() : 'N/A';
+                }
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusBox = document.getElementById('statusBox');
+            statusBox.textContent = message;
+            statusBox.className = `status-box show ${type}`;
+            
+            setTimeout(() => {
+                statusBox.classList.remove('show');
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

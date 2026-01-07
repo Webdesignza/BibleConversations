@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Interface - RAG FastAPI System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            height: calc(100vh - 40px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 15px 15px 0 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 24px;
+        }
+
+        .header-info {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .chat-container {
+            background: white;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .api-key-section {
+            padding: 20px 30px;
+            background: #f8f9ff;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .api-key-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .api-key-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            background: #fafafa;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            text-align: right;
+        }
+
+        .message-bubble {
+            display: inline-block;
+            max-width: 70%;
+            padding: 15px 20px;
+            border-radius: 20px;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message.assistant .message-bubble {
+            background: white;
+            color: #333;
+            border: 1px solid #e5e7eb;
+            border-bottom-left-radius: 5px;
+            text-align: left;
+        }
+
+        .message-time {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        .sources {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9ff;
+            border-radius: 10px;
+            border-left: 3px solid #667eea;
+        }
+
+        .sources-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+
+        .source-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .input-container {
+            padding: 20px 30px;
+            background: white;
+            border-radius: 0 0 15px 15px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        #messageInput {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 25px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: none;
+            max-height: 120px;
+        }
+
+        #messageInput:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            font-size: 20px;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-mic {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-mic:hover {
+            background: #059669;
+            transform: scale(1.05);
+        }
+
+        .btn-mic.recording {
+            background: #ef4444;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .btn-send {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-send:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-send:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 15px 20px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            border-bottom-left-radius: 5px;
+            display: inline-block;
+        }
+
+        .typing-indicator.show {
+            display: inline-block;
+        }
+
+        .typing-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #667eea;
+            margin: 0 3px;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+
+        .back-link {
+            display: inline-block;
+            color: #667eea;
+            text-decoration: none;
+            padding: 10px 20px;
+            transition: color 0.3s;
+        }
+
+        .back-link:hover {
+            color: #764ba2;
+        }
+
+        .welcome-message {
+            text-align: center;
+            padding: 50px 20px;
+            color: #999;
+        }
+
+        .welcome-message h2 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .error-message {
+            background: #fef2f2;
+            color: #ef4444;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            border-left: 3px solid #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>💬 Chat Interface</h1>
+                <div class="header-info">Ask questions about your documents</div>
+            </div>
+            <a href="/" class="back-link">← Home</a>
+        </div>
+
+        <div class="chat-container">
+            <div class="api-key-section">
+                <input 
+                    type="password" 
+                    id="apiKey" 
+                    class="api-key-input" 
+                    placeholder="Enter your API key to start chatting"
+                >
+            </div>
+
+            <div class="messages-container" id="messagesContainer">
+                <div class="welcome-message">
+                    <h2>👋 Welcome!</h2>
+                    <p>Enter your API key above and start asking questions.</p>
+                    <p style="margin-top: 10px;">You can type or use the microphone 🎤</p>
+                </div>
+            </div>
+
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <button class="btn-icon btn-mic" id="micBtn" title="Voice input">
+                        🎤
+                    </button>
+                    <textarea 
+                        id="messageInput" 
+                        placeholder="Type your question here... (or use the microphone)"
+                        rows="1"
+                    ></textarea>
+                    <button class="btn-icon btn-send" id="sendBtn" title="Send message">
+                        ➤
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000';
+        let recognition = null;
+        let isRecording = false;
+
+        // Initialize Speech Recognition
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                document.getElementById('messageInput').value = transcript;
+                stopRecording();
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                stopRecording();
+                showError('Speech recognition error: ' + event.error);
+            };
+
+            recognition.onend = () => {
+                stopRecording();
+            };
+        }
+
+        // Get API key
+        function getApiKey() {
+            return document.getElementById('apiKey').value;
+        }
+
+        // Microphone button
+        document.getElementById('micBtn').addEventListener('click', () => {
+            if (!recognition) {
+                showError('Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.');
+                return;
+            }
+
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        });
+
+        function startRecording() {
+            const apiKey = getApiKey();
+            if (!apiKey) {
+                showError('Please enter your API key first');
+                return;
+            }
+
+            isRecording = true;
+            document.getElementById('micBtn').classList.add('recording');
+            recognition.start();
+        }
+
+        function stopRecording() {
+            isRecording = false;
+            document.getElementById('micBtn').classList.remove('recording');
+            if (recognition) {
+                recognition.stop();
+            }
+        }
+
+        // Send button
+        document.getElementById('sendBtn').addEventListener('click', sendMessage);
+
+        // Enter to send (Shift+Enter for new line)
+        document.getElementById('messageInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Auto-resize textarea
+        document.getElementById('messageInput').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        async function sendMessage() {
+            const apiKey = getApiKey();
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+
+            if (!apiKey) {
+                showError('Please enter your API key');
+                return;
+            }
+
+            if (!message) {
+                return;
+            }
+
+            // Clear input
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+
+            // Add user message
+            addMessage('user', message);
+
+            // Show typing indicator
+            showTypingIndicator();
+
+            try {
+                const response = await fetch(`${API_BASE}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': apiKey
+                    },
+                    body: JSON.stringify({
+                        question: message,
+                        k: 3,
+                        include_sources: true
+                    })
+                });
+
+                hideTypingIndicator();
+
+                const data = await response.json();
+
+                if (data.success) {
+                    addMessage('assistant', data.answer, data.sources);
+                } else {
+                    showError(data.message || 'Failed to get response');
+                }
+
+            } catch (error) {
+                hideTypingIndicator();
+                showError('Network error: ' + error.message);
+            }
+        }
+
+        function addMessage(role, content, sources = null) {
+            // Remove welcome message if exists
+            const welcomeMsg = document.querySelector('.welcome-message');
+            if (welcomeMsg) {
+                welcomeMsg.remove();
+            }
+
+            const messagesContainer = document.getElementById('messagesContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+
+            const now = new Date().toLocaleTimeString();
+            
+            let sourcesHTML = '';
+            if (sources && sources.length > 0) {
+                sourcesHTML = `
+                    <div class="sources">
+                        <div class="sources-title">📚 Sources (${sources.length}):</div>
+                        ${sources.map((source, i) => `
+                            <div class="source-item">
+                                <strong>Source ${i + 1}</strong> (Relevance: ${(1 - source.score).toFixed(2)})<br>
+                                ${source.content}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            messageDiv.innerHTML = `
+                <div class="message-bubble">
+                    ${content}
+                    ${sourcesHTML}
+                </div>
+                <div class="message-time">${now}</div>
+            `;
+
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            const messagesContainer = document.getElementById('messagesContainer');
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message assistant';
+            typingDiv.id = 'typingIndicator';
+            typingDiv.innerHTML = `
+                <div class="typing-indicator show">
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                </div>
+            `;
+            messagesContainer.appendChild(typingDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            if (indicator) {
+                indicator.remove();
+            }
+        }
+
+        function showError(message) {
+            const messagesContainer = document.getElementById('messagesContainer');
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = '❌ ' + message;
+            messagesContainer.appendChild(errorDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+            setTimeout(() => {
+                errorDiv.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
