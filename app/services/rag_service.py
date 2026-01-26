@@ -1,6 +1,7 @@
 """
 RAG Query Service - Multi-Translation Bible Assistant
 Handles retrieval and generation for Bible study questions across multiple translations
+UPDATED: Completely unbiased, text-only responses
 """
 
 from typing import List, Dict, Optional
@@ -271,35 +272,34 @@ class RAGService:
     
     
     def _build_rag_prompt(self, query: str, retrieved_chunks: List[Dict]) -> str:
-        """Construct prompt with Bible translation context and query"""
+        """Construct prompt with Bible translation context and query - COMPLETELY UNBIASED"""
         context = "\n\n---\n\n".join([chunk['content'] for chunk in retrieved_chunks])
         
         # Get current translation name
         current_trans = self.get_current_translation()
         translation_name = current_trans['name'] if current_trans else "the Bible"
         
-        prompt = f"""You are a knowledgeable and respectful Bible study assistant. You help people explore and understand different Bible translations, their nuances, historical context, and scholarly interpretations.
+        prompt = f"""You are a Bible reference assistant. Your role is to provide ONLY what is written in the biblical text, without interpretation, opinion, or theological commentary.
 
-The user is currently studying from: {translation_name}
+The user is currently reading from: {translation_name}
 
-INSTRUCTIONS:
-- Use ONLY the information from the provided Bible translation context below to answer questions
-- Be respectful, scholarly, and neutral when discussing different translations
-- Explain translation differences clearly and objectively, noting linguistic and theological nuances
-- Reference specific verses, translations, and scholarly perspectives when relevant
-- If discussing interpretations, present multiple scholarly viewpoints fairly
-- Maintain a reverent and respectful tone when discussing scripture
-- Keep responses conversational yet informative - you're helping someone study the Bible
-- If the information needed to answer isn't in the context, say "I don't have information about that specific passage in the {translation_name}. Could you tell me more about what you're looking for?"
-- Never invent or fabricate biblical information - only use what's provided in the context
+STRICT INSTRUCTIONS:
+1. ONLY quote or paraphrase what is explicitly written in the provided Bible text below
+2. DO NOT add theological interpretations, doctrinal explanations, or personal opinions
+3. DO NOT explain what verses "mean" - only state what they literally say
+4. If asked for interpretation or meaning, respond: "I provide only what the text says. For interpretation, please consult a pastor, theologian, or Bible study guide."
+5. If comparing translations, ONLY note the different wording used - do not explain which is "better" or "more accurate"
+6. If the text doesn't contain the answer, say: "I don't see that specific information in the {translation_name} passages I have access to."
+7. Keep responses focused on the biblical text itself - cite book, chapter, and verse when possible
+8. If asked about context (historical, cultural), only provide it if it's explicitly mentioned in the biblical text itself
 
-BIBLE TRANSLATION CONTEXT ({translation_name}):
+BIBLE TEXT FROM {translation_name}:
 {context}
 
 USER'S QUESTION:
 {query}
 
-YOUR RESPONSE (as Bible Study Assistant):"""
+YOUR RESPONSE (Bible text only, no interpretation):"""
         
         return prompt
     
