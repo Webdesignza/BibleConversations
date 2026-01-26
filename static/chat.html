@@ -345,7 +345,7 @@
     </div>
 
     <script>
-        const API_BASE = 'http://127.0.0.1:8000';
+        const API_BASE = 'http://127.0.0.1:8009';
         let recognition = null;
         let isRecording = false;
 
@@ -512,9 +512,35 @@
                 `;
             }
 
+           let speakerButton = '';
+            if (role === 'assistant') {
+                // Store the text in a data attribute instead of inline onclick
+                const buttonId = 'speak-btn-' + Date.now();
+                speakerButton = `
+                    <button 
+                        id="${buttonId}"
+                        data-text="${content.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
+                        style="margin-left: 10px; margin-top: 10px; padding: 8px 15px; cursor: pointer; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 20px; font-size: 14px; font-weight: 500;" 
+                        title="Listen to response">
+                        🔊 Listen
+                    </button>
+                `;
+                
+                // Add click handler after DOM is updated
+                setTimeout(() => {
+                    const btn = document.getElementById(buttonId);
+                    if (btn) {
+                        btn.addEventListener('click', () => {
+                            playResponse(content);
+                        });
+                    }
+                }, 100);
+            }
+
             messageDiv.innerHTML = `
                 <div class="message-bubble">
                     ${content}
+                    ${speakerButton}
                     ${sourcesHTML}
                 </div>
                 <div class="message-time">${now}</div>
@@ -558,6 +584,41 @@
             setTimeout(() => {
                 errorDiv.remove();
             }, 5000);
+        }
+
+        async function playResponse(text) {
+            const apiKey = getApiKey();
+            
+            if (!apiKey) {
+                showError('Please enter your API key');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/chat/tts`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': apiKey
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        lang: 'en',
+                        slow: false
+                    })
+                });
+
+                if (!response.ok) throw new Error('TTS failed');
+
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+                audio.play();
+
+            } catch (error) {
+                console.error('TTS error:', error);
+                showError('Failed to play audio: ' + error.message);
+            }
         }
     </script>
 </body>

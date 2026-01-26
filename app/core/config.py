@@ -1,35 +1,40 @@
 """
-Configuration Management
-Loads environment variables and application settings
+Configuration settings for the RAG FastAPI application
 """
 
-from pydantic_settings import BaseSettings
+import os
 from functools import lru_cache
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from .env file"""
+    """Application settings"""
     
-    # OpenAI Configuration
+    # API Keys
     OPENAI_API_KEY: str
-    
-    # API Security
-    API_KEY: str
-    
-    # Application Settings
-    CHROMA_DB_PATH: str = "./chroma_db"
-    UPLOAD_DIR: str = "./uploads"
-    MAX_UPLOAD_SIZE_MB: int = 10
+    GROQ_API_KEY: str = ""
     
     # Model Configuration
     EMBEDDING_MODEL: str = "text-embedding-3-small"
-    CHAT_MODEL: str = "gpt-3.5-turbo"
-    TEMPERATURE: float = 0.3
+    CHAT_MODEL: str = "llama-3.1-70b-versatile"
+    
+    # Groq API
+    GROQ_API_BASE: str = "https://api.groq.com/openai/v1"
+    
+    # RAG Configuration
+    CHROMA_DB_PATH: str = "./chroma_db"
     RETRIEVAL_K: int = 3
+    TEMPERATURE: float = 0.7
+    
+    # File Upload Configuration
+    UPLOAD_DIR: str = "./uploads"
     
     # Server Configuration
-    HOST: str = "127.0.0.1"
-    PORT: int = 8000
+    HOST: str = "0.0.0.0"
+    PORT: int = 8007
+    
+    # Security
+    API_KEY: str
     
     class Config:
         env_file = ".env"
@@ -38,5 +43,5 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    """Return cached settings instance"""
+    """Get cached settings instance"""
     return Settings()

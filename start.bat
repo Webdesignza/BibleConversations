@@ -1,6 +1,6 @@
 @echo off
 echo ======================================================================
-echo RAG FastAPI System - Startup Script
+echo Bible Conversations - Multi-Translation Bible Study System
 echo ======================================================================
 echo.
 
@@ -30,20 +30,28 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [2/2] Starting FastAPI server...
+echo [2/2] Starting Bible Conversations server...
 echo.
 echo ======================================================================
-echo Server will start at: http://127.0.0.1:8000
-echo API Documentation: http://127.0.0.1:8000/docs
-echo Admin Panel: http://127.0.0.1:8000/admin
-echo Chat Interface: http://127.0.0.1:8000/chat
+echo Server starting at: http://127.0.0.1:8009
+echo.
+echo Available Pages:
+echo   - Bible Widget Demo:  http://127.0.0.1:8009/static/bibleconversation.html
+echo   - Admin Panel:        http://127.0.0.1:8009/admin
+echo   - Chat Interface:     http://127.0.0.1:8009/chat
+echo   - API Documentation:  http://127.0.0.1:8009/docs
+echo.
+echo Translation Management:
+echo   1. Create translations in Admin Panel
+echo   2. Upload Bible text files to each translation
+echo   3. Select translation in the widget dropdown
 echo ======================================================================
 echo.
 echo Press CTRL+C to stop the server
 echo.
 
-REM Start the server using run.py
-python run.py
+REM Start the server on port 8009
+py -m uvicorn app.main:app --reload --port 8009
 
 REM If the server stops, pause so user can see any error messages
 pause

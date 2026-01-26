@@ -1,98 +1,132 @@
 """
-Document Management Routes
-Endpoints for uploading and managing documents
+API Routes for Document Management (Translation-Specific)
 """
 
-import os
-import shutil
-from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from typing import List
-
-from app.core.config import get_settings
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from app.core.security import verify_api_key
-from app.models.schemas import DocumentUploadResponse, VectorStoreStatsResponse
-from app.services.indexing_service import get_indexing_service
+from app.services.document_service import get_document_service
+from app.services.rag_service import get_rag_service
+import traceback
 
-settings = get_settings()
-router = APIRouter(prefix="/api/documents", tags=["Documents"])
-
-# Ensure upload directory exists
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+router = APIRouter()
 
 
-@router.post("/upload", response_model=DocumentUploadResponse, dependencies=[Depends(verify_api_key)])
-async def upload_document(file: UploadFile = File(...)):
+@router.post("/{translation_id}/upload")
+async def upload_document_to_translation(
+    translation_id: str,
+    file: UploadFile = File(...),
+    api_key: str = Depends(verify_api_key)
+):
     """
-    Upload and process a document
-    
-    Accepts: PDF, TXT, MD files
+    Upload a document to a specific Bible translation
     
     Args:
-        file: Document file to upload
-        
+        translation_id: ID of the translation to upload to
+        file: Document file (PDF, TXT, MD, DOCX)
+    
     Returns:
-        Upload result with processing statistics
+        Success status and number of chunks created
     """
-    # Validate file type
-    allowed_extensions = ['.pdf', '.txt', '.md']
-    file_extension = Path(file.filename).suffix.lower()
-    
-    if file_extension not in allowed_extensions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
-        )
-    
-    # Check file size (optional)
-    max_size_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
-    
     try:
-        # Save uploaded file temporarily
-        file_path = os.path.join(settings.UPLOAD_DIR, file.filename)
+        # Verify translation exists
+        rag_service = get_rag_service()
+        translations_metadata = rag_service._load_translations_metadata()
         
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        # Check file size after saving
-        file_size = os.path.getsize(file_path)
-        if file_size > max_size_bytes:
-            os.remove(file_path)
+        if translation_id not in translations_metadata:
             raise HTTPException(
-                status_code=413,
-                detail=f"File too large. Max size: {settings.MAX_UPLOAD_SIZE_MB}MB"
+                status_code=404,
+                detail=f"Translation '{translation_id}' not found"
             )
         
-        # Process document
-        indexing_service = get_indexing_service()
-        result = indexing_service.process_document(file_path)
+        # Process document for this specific translation
+        doc_service = get_document_service()
+        result = await doc_service.process_document(file, translation_id)
         
-        # Clean up uploaded file (optional - you can keep it if needed)
-        # os.remove(file_path)
+        if result['success']:
+            # Update chunk count in metadata
+            rag_service.update_translation_chunk_count(
+                translation_id,
+                result['total_chunks']
+            )
         
-        return DocumentUploadResponse(**result)
+        return result
         
     except HTTPException:
         raise
     except Exception as e:
-        # Clean up on error
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Upload failed: {str(e)}"
+        )
 
 
-@router.get("/stats", response_model=VectorStoreStatsResponse, dependencies=[Depends(verify_api_key)])
-async def get_vector_store_stats():
+@router.get("/{translation_id}/stats")
+async def get_translation_stats(
+    translation_id: str,
+    api_key: str = Depends(verify_api_key)
+):
     """
-    Get vector store statistics
+    Get statistics for a specific translation
+    
+    Args:
+        translation_id: ID of the translation
     
     Returns:
-        Statistics about indexed documents
+        Translation statistics
     """
     try:
-        indexing_service = get_indexing_service()
-        stats = indexing_service.get_vectorstore_stats()
-        return VectorStoreStatsResponse(**stats)
+        rag_service = get_rag_service()
+        translations_metadata = rag_service._load_translations_metadata()
+        
+        if translation_id not in translations_metadata:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Translation '{translation_id}' not found"
+            )
+        
+        translation_info = translations_metadata[translation_id]
+        
+        return {
+            'success': True,
+            'translation_id': translation_id,
+            'name': translation_info.get('name', translation_id),
+            'total_chunks': translation_info.get('chunks', 0),
+            'created': translation_info.get('created', ''),
+            'description': translation_info.get('description', '')
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get stats: {str(e)}"
+        )
+
+
+@router.get("/stats")
+async def get_all_stats(api_key: str = Depends(verify_api_key)):
+    """
+    Get statistics for all translations
+    
+    Returns:
+        List of all translation statistics
+    """
+    try:
+        rag_service = get_rag_service()
+        translations = rag_service.get_available_translations()
+        
+        return {
+            'success': True,
+            'translations': translations,
+            'total_translations': len(translations)
+        }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get stats: {str(e)}"
+        )

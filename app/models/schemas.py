@@ -73,6 +73,24 @@ class ChatResponse(BaseModel):
 # VOICE/SPEECH SCHEMAS
 # ============================================================================
 
+class TTSRequest(BaseModel):
+    """Request model for text-to-speech"""
+    text: str = Field(..., description="Text to convert to speech", min_length=1)
+    voice: str = Field("en-US-JennyNeural", description="Voice name for TTS")
+    rate: str = Field("+0%", description="Speech rate adjustment")
+    pitch: str = Field("+0Hz", description="Pitch adjustment")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "text": "Hello, how can I help you today?",
+                "voice": "en-US-JennyNeural",
+                "rate": "+0%",
+                "pitch": "+0Hz"
+            }
+        }
+
+
 class VoiceQueryResponse(BaseModel):
     """Response for voice query (includes transcription)"""
     success: bool

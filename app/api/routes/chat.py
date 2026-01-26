@@ -1,33 +1,23 @@
-"""
-Chat/Query Routes
-Endpoints for RAG-based question answering
-"""
-
-from fastapi import APIRouter, HTTPException, Depends
-
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import Response
 from app.core.security import verify_api_key
-from app.models.schemas import ChatRequest, ChatResponse
 from app.services.rag_service import get_rag_service
+from app.services.speech_service import get_speech_service
+from app.services.stt_service import get_stt_service
+from app.models.schemas import ChatRequest, ChatResponse, TTSRequest
+import traceback
+import tempfile
+import os
 
-router = APIRouter(prefix="/api/chat", tags=["Chat"])
+router = APIRouter()
 
 
-@router.post("", response_model=ChatResponse, dependencies=[Depends(verify_api_key)])
-async def chat_query(request: ChatRequest):
-    """
-    Ask a question using RAG
-    
-    The system will:
-    1. Retrieve relevant document chunks
-    2. Generate an answer based on the context
-    3. Return the answer with optional sources
-    
-    Args:
-        request: Chat request with question and optional parameters
-        
-    Returns:
-        Generated answer with sources
-    """
+@router.post("", response_model=ChatResponse)
+async def chat(
+    request: ChatRequest,
+    api_key: str = Depends(verify_api_key)
+):
+    """Chat endpoint for question answering"""
     try:
         rag_service = get_rag_service()
         result = rag_service.query(
@@ -36,12 +26,90 @@ async def chat_query(request: ChatRequest):
             include_sources=request.include_sources
         )
         
-        if not result["success"]:
-            raise HTTPException(status_code=500, detail=result.get("message", "Query failed"))
-        
         return ChatResponse(**result)
+        
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Chat failed: {str(e)}"
+        )
+
+
+@router.post("/stt")
+async def speech_to_text(
+    audio: UploadFile = File(...),
+    api_key: str = Depends(verify_api_key)
+):
+    """
+    Convert speech audio to text using Faster-Whisper
+    
+    Args:
+        audio: Audio file (WAV, MP3, WEBM, etc.)
+    
+    Returns:
+        Transcribed text
+    """
+    # Save uploaded audio to temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
+        content = await audio.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+    
+    try:
+        # Get STT service and transcribe
+        stt_service = get_stt_service()
+        result = stt_service.transcribe_audio(tmp_path)
+        
+        return result
+    
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"STT failed: {str(e)}"
+        )
+    
+    finally:
+        # Clean up temporary file
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+@router.post("/tts")
+async def text_to_speech(
+    request: TTSRequest,
+    api_key: str = Depends(verify_api_key)
+):
+    """
+    Convert text to speech using Edge TTS
+    
+    Args:
+        request: TTSRequest with text, voice, rate, pitch
+    
+    Returns:
+        Audio file (MP3)
+    """
+    try:
+        if not request.text:
+            raise HTTPException(status_code=400, detail="Text is required")
+        
+        speech_service = get_speech_service()
+        audio_bytes = await speech_service.text_to_speech(
+            request.text, 
+            request.voice, 
+            request.rate, 
+            request.pitch
+        )
+        
+        return Response(
+            content=audio_bytes,
+            media_type="audio/mpeg",
+            headers={"Content-Disposition": "inline; filename=speech.mp3"}
+        )
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
