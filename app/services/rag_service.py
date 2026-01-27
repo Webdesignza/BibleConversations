@@ -1,7 +1,7 @@
 """
 RAG Query Service - Multi-Translation Bible Assistant
 Handles retrieval and generation for Bible study questions across multiple translations
-UPDATED: Completely unbiased, text-only responses
+UPDATED: Completely unbiased, text-only responses + Translation Comparison
 """
 
 from typing import List, Dict, Optional
@@ -12,8 +12,8 @@ import shutil
 from pathlib import Path
 
 from langchain_chroma import Chroma
-from langchain_openai import ChatOpenAI
 from langchain_huggingface import HuggingFaceEmbeddings
+from groq import Groq
 
 from app.core.config import get_settings
 
@@ -35,13 +35,8 @@ class RAGService:
         )
         print(f"✓ Embeddings initialized: {settings.EMBEDDING_MODEL}")
         
-        # Groq LLM (FREE!)
-        self.llm = ChatOpenAI(
-            model=settings.CHAT_MODEL,
-            temperature=settings.TEMPERATURE,
-            api_key=settings.GROQ_API_KEY,
-            base_url=settings.GROQ_API_BASE
-        )
+        # Groq LLM (FREE!) - Direct SDK, no OpenAI wrapper
+        self.groq_client = Groq(api_key=settings.GROQ_API_KEY)
         print(f"✓ LLM initialized: {settings.CHAT_MODEL} (Groq - FREE)")
         
         # Translation management
@@ -290,8 +285,10 @@ STRICT INSTRUCTIONS:
 4. If asked for interpretation or meaning, respond: "I provide only what the text says. For interpretation, please consult a pastor, theologian, or Bible study guide."
 5. If comparing translations, ONLY note the different wording used - do not explain which is "better" or "more accurate"
 6. If the text doesn't contain the answer, say: "I don't see that specific information in the {translation_name} passages I have access to."
-7. Keep responses focused on the biblical text itself - cite book, chapter, and verse when possible
-8. If asked about context (historical, cultural), only provide it if it's explicitly mentioned in the biblical text itself
+7. When citing passages, use natural verse ranges (e.g., "John 3:16-18" instead of "verse 16, verse 17, verse 18")
+8. For consecutive verses, introduce ONCE with the verse range at the beginning (e.g., "John 3 verses 16 to 18 say:") then read the text smoothly without repeating "verse 16", "verse 17" for each one
+9. Read the biblical text naturally and conversationally - avoid robotic verse-by-verse announcements
+10. If asked about context (historical, cultural), only provide it if it's explicitly mentioned in the biblical text itself
 
 BIBLE TEXT FROM {translation_name}:
 {context}
@@ -299,7 +296,7 @@ BIBLE TEXT FROM {translation_name}:
 USER'S QUESTION:
 {query}
 
-YOUR RESPONSE (Bible text only, no interpretation):"""
+YOUR RESPONSE (Bible text only, no interpretation, natural verse ranges):"""
         
         return prompt
     
@@ -335,9 +332,19 @@ YOUR RESPONSE (Bible text only, no interpretation):"""
             # Build prompt with context
             prompt = self._build_rag_prompt(question, retrieved_chunks)
             
-            # Generate answer using Groq
-            response = self.llm.invoke(prompt)
-            answer = response.content
+            # Generate answer using Groq directly
+            chat_completion = self.groq_client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                model=settings.CHAT_MODEL,
+                temperature=settings.TEMPERATURE,
+            )
+            
+            answer = chat_completion.choices[0].message.content
             
             result = {
                 'success': True,
@@ -361,6 +368,188 @@ YOUR RESPONSE (Bible text only, no interpretation):"""
                 'error': str(e),
                 'sources': []
             }
+    
+    
+    def compare_translations(self, question: str, translation_ids: List[str], k: int = None) -> Dict:
+        """
+        Compare the same passage across multiple Bible translations
+        
+        Args:
+            question: The Bible question/passage to look up
+            translation_ids: List of translation IDs to compare (e.g., ['kjv', 'niv', 'esv'])
+            k: Number of chunks to retrieve per translation
+            
+        Returns:
+            Dictionary with comparison results from each translation
+        """
+        try:
+            if not translation_ids or len(translation_ids) < 2:
+                return {
+                    'success': False,
+                    'question': question,
+                    'error': 'Please select at least 2 translations to compare',
+                    'comparisons': []
+                }
+            
+            # Check all translations exist
+            metadata = self._load_translations_metadata()
+            for trans_id in translation_ids:
+                if trans_id not in metadata:
+                    return {
+                        'success': False,
+                        'question': question,
+                        'error': f'Translation "{trans_id}" not found',
+                        'comparisons': []
+                    }
+            
+            # Retrieve passages from each translation
+            comparisons = []
+            
+            for trans_id in translation_ids:
+                # Load this translation's vector store
+                translation_path = self.chroma_base_path / trans_id
+                vectorstore = Chroma(
+                    persist_directory=str(translation_path),
+                    embedding_function=self.embeddings
+                )
+                
+                # Retrieve relevant chunks
+                if k is None:
+                    k = settings.RETRIEVAL_K
+                
+                results = vectorstore.similarity_search_with_score(question, k=k)
+                
+                retrieved_chunks = []
+                for doc, score in results:
+                    retrieved_chunks.append({
+                        'content': doc.page_content,
+                        'score': float(score),
+                        'metadata': doc.metadata
+                    })
+                
+                # Get translation info
+                trans_info = metadata[trans_id]
+                
+                comparisons.append({
+                    'translation_id': trans_id,
+                    'translation_name': trans_info.get('name', trans_id),
+                    'chunks': retrieved_chunks,
+                    'num_chunks': len(retrieved_chunks)
+                })
+            
+            # Generate comparison analysis using Groq
+            comparison_prompt = self._build_comparison_prompt(question, comparisons)
+            
+            chat_completion = self.groq_client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": comparison_prompt
+                    }
+                ],
+                model=settings.CHAT_MODEL,
+                temperature=settings.TEMPERATURE,
+            )
+            
+            full_response = chat_completion.choices[0].message.content
+            
+            # Parse the response to separate spoken and table parts
+            spoken_text = ""
+            table_html = ""
+            
+            if "[SPOKEN]:" in full_response and "[TABLE]:" in full_response:
+                parts = full_response.split("[TABLE]:")
+                spoken_part = parts[0].replace("[SPOKEN]:", "").strip()
+                table_part = parts[1].strip()
+                
+                spoken_text = spoken_part
+                table_html = table_part
+            else:
+                # Fallback if AI doesn't follow format perfectly
+                spoken_text = full_response
+                table_html = ""
+            
+            return {
+                'success': True,
+                'question': question,
+                'analysis': spoken_text,  # This gets spoken
+                'table_html': table_html,  # This gets displayed
+                'comparisons': comparisons,
+                'num_translations': len(comparisons)
+            }
+            
+        except Exception as e:
+            print(f"Comparison Error: {str(e)}")
+            print(f"Traceback:\n{traceback.format_exc()}")
+            return {
+                'success': False,
+                'question': question,
+                'error': str(e),
+                'comparisons': []
+            }
+    
+    
+    def _build_comparison_prompt(self, question: str, comparisons: List[Dict]) -> str:
+        """Build prompt for comparing multiple translations with table format"""
+        
+        # Format each translation's text
+        translation_texts = []
+        for comp in comparisons:
+            trans_name = comp['translation_name']
+            context = "\n".join([chunk['content'] for chunk in comp['chunks']])
+            translation_texts.append(f"=== {trans_name} ===\n{context}")
+        
+        combined_context = "\n\n".join(translation_texts)
+        
+        # Get translation names for the table
+        trans_names = [comp['translation_name'] for comp in comparisons]
+        
+        prompt = f"""You are comparing Bible translations. You MUST provide your response in this EXACT format:
+
+[SPOKEN]: Brief summary here
+
+[TABLE]: HTML table here
+
+USER'S QUESTION:
+{question}
+
+BIBLE TEXT FROM EACH TRANSLATION:
+{combined_context}
+
+PART 1 - SPOKEN SUMMARY:
+Start with "[SPOKEN]:" then write a brief 2-3 sentence summary.
+Example: "Here's John 3:16 from the KJV, NIV, and ESV. The KJV uses 'only begotten Son', while the NIV and ESV use 'one and only Son'. The rest of the wording is very similar."
+
+PART 2 - HTML TABLE:
+Start with "[TABLE]:" then create an HTML table showing the verses side-by-side.
+
+Requirements:
+- Use <table class="comparison-table">
+- First column header: "Passage"
+- Other column headers: {', '.join(trans_names)}
+- Each row shows: verse reference | text from each translation
+- If passage has multiple verses, create one row per verse
+
+Example table structure:
+[TABLE]:
+<table class="comparison-table">
+<tr>
+<th>Passage</th>
+<th>KJV</th>
+<th>NIV</th>
+</tr>
+<tr>
+<td>John 3:16</td>
+<td>For God so loved the world, that he gave his only begotten Son...</td>
+<td>For God so loved the world that he gave his one and only Son...</td>
+</tr>
+</table>
+
+CRITICAL: You MUST include both [SPOKEN]: and [TABLE]: markers in your response.
+
+YOUR RESPONSE (must have both parts):"""
+        
+        return prompt
 
 
 # Singleton instance

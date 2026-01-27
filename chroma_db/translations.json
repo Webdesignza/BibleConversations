@@ -4,5 +4,23 @@
     "description": "The King James Bible is a translation of earlier texts and manuscripts that make up the Holy Bible. The Holy Bible comprises the Old Testament, originally in Hebrew and the New Testament, a collection of eyewitness testimonies about Jesus' life and letters written by early Christian leaders.",
     "created": "2026-01-19T13:00:51.971493",
     "chunks": 5747
+  },
+  "NIV": {
+    "name": "New International Version (NIV)",
+    "description": "First published in 1978 and updated in 1984 and 2011. It is renowned for balancing accuracy and readability using a \"thought-for-thought\" approach, making it accessible for study, preaching, and daily reading.",
+    "created": "2026-01-27T15:05:21.307869",
+    "chunks": 5273
+  },
+  "ESV": {
+    "name": "English Standard Version (ESV)",
+    "description": "First published in 2001, that prioritizes literal accuracy while maintaining contemporary English, literary excellence, and readability. Created by over 100 evangelical scholars, it is suitable for serious study, memorization, and public reading, often used by pastors and in academic settings.",
+    "created": "2026-01-27T15:22:10.263078",
+    "chunks": 7421
+  },
+  "ICB": {
+    "name": "The Childrens Bible (ICB)",
+    "description": "The International Children\u2019s Bible (ICB) is a direct, word-for-thought translation of the Hebrew and Greek scriptures designed for children aged 6\u201312, typically written at a 3rd-grade level.",
+    "created": "2026-01-27T15:47:28.618562",
+    "chunks": 982
   }
 }

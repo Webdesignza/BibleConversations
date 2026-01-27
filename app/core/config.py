@@ -1,5 +1,6 @@
 """
 Configuration settings for the RAG FastAPI application
+FULLY FREE - No OpenAI Required
 """
 
 import os
@@ -10,13 +11,12 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Application settings"""
     
-    # API Keys
-    OPENAI_API_KEY: str
-    GROQ_API_KEY: str = ""
+    # API Keys - ONLY GROQ (FREE!)
+    GROQ_API_KEY: str
     
     # Model Configuration
-    EMBEDDING_MODEL: str = "text-embedding-3-small"
-    CHAT_MODEL: str = "llama-3.1-70b-versatile"
+    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"  # FREE HuggingFace
+    CHAT_MODEL: str = "llama-3.1-70b-versatile"  # FREE Groq
     
     # Groq API
     GROQ_API_BASE: str = "https://api.groq.com/openai/v1"
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     
     # Server Configuration
     HOST: str = "0.0.0.0"
-    PORT: int = 8007
+    PORT: int = 8009
     
     # Security
     API_KEY: str

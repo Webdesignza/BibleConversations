@@ -5,11 +5,22 @@ from app.services.rag_service import get_rag_service
 from app.services.speech_service import get_speech_service
 from app.services.stt_service import get_stt_service
 from app.models.schemas import ChatRequest, ChatResponse, TTSRequest
+from typing import List
+from pydantic import BaseModel
 import traceback
 import tempfile
 import os
 
 router = APIRouter()
+
+
+# Request model for translation comparison
+class CompareRequest(BaseModel):
+    """Request model for translation comparison"""
+    question: str
+    translation_ids: List[str]  # e.g., ["kjv", "niv", "esv"]
+    k: int = 3
+    include_chunks: bool = False
 
 
 @router.post("", response_model=ChatResponse)
@@ -42,7 +53,7 @@ async def speech_to_text(
     api_key: str = Depends(verify_api_key)
 ):
     """
-    Convert speech audio to text using Faster-Whisper
+    Convert speech audio to text using Groq Whisper
     
     Args:
         audio: Audio file (WAV, MP3, WEBM, etc.)
@@ -113,3 +124,43 @@ async def text_to_speech(
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)}")
+
+
+@router.post("/compare")
+async def compare_translations(
+    request: CompareRequest,
+    api_key: str = Depends(verify_api_key)
+):
+    """
+    Compare the same Bible passage across multiple translations
+    
+    Example request:
+    {
+        "question": "What does John 3:16 say?",
+        "translation_ids": ["kjv", "niv", "esv"],
+        "k": 3,
+        "include_chunks": false
+    }
+    """
+    try:
+        rag_service = get_rag_service()
+        
+        result = rag_service.compare_translations(
+            question=request.question,
+            translation_ids=request.translation_ids,
+            k=request.k
+        )
+        
+        # Optionally remove chunks to reduce response size
+        if not request.include_chunks and result.get('success'):
+            for comparison in result.get('comparisons', []):
+                comparison.pop('chunks', None)
+        
+        return result
+        
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Comparison failed: {str(e)}"
+        )

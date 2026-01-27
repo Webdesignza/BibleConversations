@@ -29,6 +29,9 @@
         currentAudio: null,
         availableTranslations: [],
         currentTranslation: null,
+        compareMode: false,
+        selectedTranslationsForCompare: [],
+        textMode: false,  // NEW: Toggle between voice and text input
         
         // Initialize
         init() {
@@ -210,8 +213,10 @@
                 #bible-popup {
                     background: white;
                     border-radius: 20px;
-                    width: 90%;
-                    max-width: 500px;
+                    width: 80%;
+                    max-width: 1400px;
+                    max-height: 90vh;
+                    overflow-y: auto;
                     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
                     animation: slideUp 0.3s;
                 }
@@ -255,7 +260,7 @@
                 }
                 
                 .translation-selector {
-                    margin-bottom: 20px;
+                    margin-bottom: 15px;
                     text-align: left;
                 }
                 
@@ -282,6 +287,39 @@
                     border-color: #1E3A8A;
                 }
                 
+                #compare-mode-btn {
+                    width: 100%;
+                    margin-bottom: 15px;
+                }
+                
+                .bible-btn-action.active {
+                    background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;
+                }
+                
+                #compare-selections {
+                    text-align: left;
+                    max-height: 200px;
+                    overflow-y: auto;
+                }
+                
+                #compare-selections label {
+                    display: block;
+                    padding: 8px;
+                    margin-bottom: 5px;
+                    border-radius: 5px;
+                    transition: background 0.2s;
+                    cursor: pointer;
+                }
+                
+                #compare-selections label:hover {
+                    background: rgba(30, 58, 138, 0.1);
+                }
+                
+                #compare-selections input[type="checkbox"] {
+                    margin-right: 8px;
+                    cursor: pointer;
+                }
+                
                 .bible-avatar {
                     width: 200px;
                     height: 200px;
@@ -289,6 +327,7 @@
                     object-fit: cover;
                     border: 5px solid #1E3A8A;
                     transition: box-shadow 0.3s ease;
+                    margin: 15px 0;
                 }
 
                 .bible-avatar.listening {
@@ -324,7 +363,7 @@
                 }
                 
                 .bible-status {
-                    margin: 20px 0;
+                    margin: 15px 0;
                     padding: 15px;
                     background: #f0f9ff;
                     border-radius: 10px;
@@ -335,6 +374,7 @@
                     display: flex;
                     gap: 10px;
                     justify-content: center;
+                    margin-bottom: 15px;
                 }
                 
                 .bible-btn-action {
@@ -363,10 +403,27 @@
                 }
                 
                 .bible-transcript {
-                    margin-top: 20px;
+                    margin-top: 15px;
                     max-height: 200px;
                     overflow-y: auto;
                     text-align: left;
+                }
+                
+                #bible-comparison-display {
+                    background: white;
+                    border-radius: 10px;
+                    padding: 15px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }
+                
+                #bible-comparison-display .comparison-summary {
+                    font-size: 14px;
+                    color: #374151;
+                    margin-bottom: 15px;
+                    padding: 10px;
+                    background: #f0f9ff;
+                    border-radius: 8px;
+                    border-left: 4px solid #1E3A8A;
                 }
                 
                 .transcript-msg {
@@ -382,6 +439,116 @@
                 
                 .transcript-msg.agent {
                     background: #fef3c7;
+                }
+                
+                .comparison-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 15px 0;
+                    font-size: 13px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    background: white;
+                }
+                
+                .comparison-table th {
+                    background: linear-gradient(135deg, #1E3A8A 0%, #D97706 100%);
+                    color: white;
+                    padding: 12px;
+                    text-align: left;
+                    font-weight: 600;
+                    border: 1px solid #ddd;
+                    vertical-align: top;
+                }
+                
+                .comparison-table td {
+                    padding: 10px 12px;
+                    border: 1px solid #ddd;
+                    vertical-align: top;
+                    line-height: 1.6;
+                    text-align: left;
+                }
+                
+                .comparison-table tr:nth-child(even) {
+                    background: #f9fafb;
+                }
+                
+                .comparison-table tr:hover {
+                    background: #f0f9ff;
+                }
+                
+                .comparison-table td:first-child {
+                    font-weight: 600;
+                    color: #1E3A8A;
+                    white-space: nowrap;
+                    width: 120px;
+                }
+                
+                .comparison-table td:not(:first-child) {
+                    width: auto;
+                    min-width: 200px;
+                }
+                
+                .input-mode-toggle {
+                    display: flex;
+                    gap: 5px;
+                    justify-content: center;
+                    margin-bottom: 15px;
+                    padding: 5px;
+                    background: #f3f4f6;
+                    border-radius: 10px;
+                }
+                
+                .mode-btn {
+                    flex: 1;
+                    padding: 8px 15px;
+                    border: none;
+                    background: transparent;
+                    color: #6b7280;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    font-weight: 500;
+                    transition: all 0.3s;
+                }
+                
+                .mode-btn.active {
+                    background: white;
+                    color: #1E3A8A;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                
+                .mode-btn:hover:not(.active) {
+                    background: rgba(255,255,255,0.5);
+                }
+                
+                .text-input-container {
+                    display: none;
+                    margin-bottom: 15px;
+                }
+                
+                .text-input-container.active {
+                    display: block;
+                }
+                
+                #bible-text-input {
+                    width: 100%;
+                    padding: 12px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-family: 'Segoe UI', sans-serif;
+                    resize: vertical;
+                    min-height: 60px;
+                }
+                
+                #bible-text-input:focus {
+                    outline: none;
+                    border-color: #1E3A8A;
+                }
+                
+                .text-send-btn {
+                    margin-top: 10px;
+                    width: 100%;
                 }
             `;
             
@@ -416,12 +583,38 @@
                                 <option value="">Loading translations...</option>
                             </select>
                         </div>
+                        
+                        <button id="compare-mode-btn" 
+                                class="bible-btn-action secondary" 
+                                onclick="BibleWidget.toggleCompareMode()">
+                            🔄 Compare Translations
+                        </button>
+                        
+                        <div id="compare-selections" style="display:none;"></div>
+                        
+                        <div class="input-mode-toggle">
+                            <button class="mode-btn active" onclick="BibleWidget.toggleInputMode('voice')">
+                                🎤 Voice
+                            </button>
+                            <button class="mode-btn" onclick="BibleWidget.toggleInputMode('text')">
+                                ⌨️ Text
+                            </button>
+                        </div>
+                        
+                        <div class="text-input-container" id="text-input-container">
+                            <textarea id="bible-text-input" placeholder="Type your Bible question here..."></textarea>
+                            <button class="bible-btn-action text-send-btn" onclick="BibleWidget.sendTextQuestion()">
+                                📤 Send Question
+                            </button>
+                        </div>
+                        
                         <img id="bible-avatar" class="bible-avatar"
                              src="${this.apiBase}/static/images/bible-avatar.png" 
                              alt="Bible AI">
                         <div id="bible-status" class="bible-status">
                             Select a translation and click Start
                         </div>
+                        <div id="bible-comparison-display" style="display:none; margin-bottom: 15px;"></div>
                         <div class="bible-controls">
                             <button id="start-btn" class="bible-btn-action" 
                                     onclick="BibleWidget.startConversation()">
@@ -489,12 +682,20 @@
         },
         
         // Add transcript
-        addTranscript(role, text) {
+        addTranscript(role, text, tableHtml = null) {
             const transcript = document.getElementById('bible-transcript');
             transcript.style.display = 'block';
             const msg = document.createElement('div');
             msg.className = `transcript-msg ${role}`;
-            msg.innerHTML = `<strong>${role === 'user' ? 'You' : 'Bible AI'}:</strong> ${text}`;
+            
+            if (role === 'agent' && tableHtml) {
+                // For comparison responses with table
+                msg.innerHTML = `<strong>Bible AI:</strong> ${text}<br><br>${tableHtml}`;
+            } else {
+                // For regular messages
+                msg.innerHTML = `<strong>${role === 'user' ? 'You' : 'Bible AI'}:</strong> ${text}`;
+            }
+            
             transcript.appendChild(msg);
             transcript.scrollTop = transcript.scrollHeight;
         },
@@ -502,26 +703,75 @@
         async startConversation() {
             console.log('=== Starting Conversation ===');
             
-            // Get translation from dropdown
-            const select = document.getElementById('translation-select');
-            const selectedId = select?.value;
+            if (this.compareMode) {
+                // Compare mode - need multiple translations
+                if (this.selectedTranslationsForCompare.length < 2) {
+                    this.updateStatus('Please select at least 2 translations to compare');
+                    return;
+                }
+            } else {
+                // Single mode - need one translation
+                const select = document.getElementById('translation-select');
+                const selectedId = select?.value;
+                
+                if (!selectedId) {
+                    this.updateStatus('Please select a Bible translation first');
+                    return;
+                }
+                
+                // Update current translation
+                const selectedTrans = this.availableTranslations.find(t => t.id === selectedId);
+                if (selectedTrans) {
+                    this.currentTranslation = {
+                        id: selectedTrans.id,
+                        name: selectedTrans.name
+                    };
+                }
+            }
             
-            if (!selectedId) {
-                this.updateStatus('Please select a Bible translation first');
+            console.log('Starting with:', this.compareMode ? this.selectedTranslationsForCompare : this.currentTranslation);
+            
+            // TEXT MODE: Just activate session without microphone
+            if (this.textMode) {
+                try {
+                    // Create session
+                    const resp = await fetch(`${this.apiBase}/agent`);
+                    const html = await resp.text();
+                    const match = html.match(/SESSION_TOKEN.*?"([^"]+)"/);
+                    if (match) {
+                        this.sessionToken = match[1];
+                        console.log('✓ Session created for text mode');
+                        
+                        // Only switch translation if in single mode
+                        if (!this.compareMode) {
+                            await this.switchTranslation(this.currentTranslation.id, this.sessionToken);
+                        }
+                    }
+                    
+                    this.conversationActive = true;
+                    document.getElementById('start-btn').disabled = true;
+                    document.getElementById('end-btn').disabled = false;
+                    document.getElementById('translation-select').disabled = true;
+                    document.getElementById('compare-mode-btn').disabled = true;
+                    
+                    // Update status for text mode
+                    if (this.compareMode) {
+                        const transNames = this.selectedTranslationsForCompare
+                            .map(id => this.availableTranslations.find(t => t.id === id)?.name)
+                            .join(', ');
+                        this.updateStatus(`Comparing: ${transNames}. Type your question.`);
+                    } else {
+                        this.updateStatus(`Ready: ${this.currentTranslation.name}. Type your question.`);
+                    }
+                    
+                } catch (error) {
+                    console.error('Session creation error:', error);
+                    this.updateStatus('Failed to start session');
+                }
                 return;
             }
             
-            // Update current translation
-            const selectedTrans = this.availableTranslations.find(t => t.id === selectedId);
-            if (selectedTrans) {
-                this.currentTranslation = {
-                    id: selectedTrans.id,
-                    name: selectedTrans.name
-                };
-            }
-            
-            console.log('Starting with:', this.currentTranslation);
-            
+            // VOICE MODE: Original microphone logic
             try {
                 // Request microphone
                 this.updateStatus('Requesting microphone...');
@@ -552,17 +802,29 @@
                     this.sessionToken = match[1];
                     console.log('✓ Session created');
                     
-                    // Switch to selected translation using THIS session token
-                    await this.switchTranslation(this.currentTranslation.id, this.sessionToken);
+                    // Only switch translation if in single mode
+                    if (!this.compareMode) {
+                        await this.switchTranslation(this.currentTranslation.id, this.sessionToken);
+                    }
                 }
                 
                 this.conversationActive = true;
                 document.getElementById('start-btn').disabled = true;
                 document.getElementById('end-btn').disabled = false;
                 document.getElementById('translation-select').disabled = true;
+                document.getElementById('compare-mode-btn').disabled = true;
                 
                 // Bible AI introduces itself
-                const greeting = `Hello! I'm your Bible study assistant. You're currently studying from the ${this.currentTranslation.name}. What would you like to know about the Bible today?`;
+                let greeting;
+                if (this.compareMode) {
+                    const transNames = this.selectedTranslationsForCompare
+                        .map(id => this.availableTranslations.find(t => t.id === id)?.name)
+                        .join(', ');
+                    greeting = `Hello! I'm your Bible study assistant. You're comparing these translations: ${transNames}. What passage would you like to compare?`;
+                } else {
+                    greeting = `Hello! I'm your Bible study assistant. You're currently studying from the ${this.currentTranslation.name}. What would you like to know about the Bible today?`;
+                }
+                
                 await this.speak(greeting);
                 
                 // Start listening after greeting
@@ -576,7 +838,6 @@
         
         // Start listening with Voice Activity Detection
         startListening() {
-            // Better state checking
             if (!this.conversationActive) {
                 console.log('Conversation not active, stopping');
                 return;
@@ -732,31 +993,90 @@
             this.updateStatus('Thinking...');
             
             try {
-                const resp = await fetch(`${this.apiBase}/api/chat`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${this.sessionToken}`
-                    },
-                    body: JSON.stringify({
-                        question: userText,
-                        k: 3,
-                        include_sources: false
-                    })
-                });
-                
-                if (!resp.ok) {
-                    console.error('Chat failed:', resp.status);
-                    throw new Error('Chat request failed');
-                }
-                
-                const data = await resp.json();
-                
-                if (data.success) {
-                    this.addTranscript('agent', data.answer);
-                    await this.speak(data.answer);
+                if (this.compareMode && this.selectedTranslationsForCompare.length >= 2) {
+                    // Comparison mode
+                    const resp = await fetch(`${this.apiBase}/api/chat/compare`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.sessionToken}`
+                        },
+                        body: JSON.stringify({
+                            question: userText,
+                            translation_ids: this.selectedTranslationsForCompare,
+                            k: 3,
+                            include_chunks: false
+                        })
+                    });
+                    
+                    if (!resp.ok) {
+                        console.error('Compare failed:', resp.status);
+                        throw new Error('Comparison request failed');
+                    }
+                    
+                    const data = await resp.json();
+                    
+                    console.log('Comparison response:', data);
+                    
+                    if (data.success) {
+                        // Add spoken text to transcript and speak it
+                        const tableHtml = data.table_html || '';
+                        
+                        console.log('Table HTML:', tableHtml);
+                        
+                        if (tableHtml) {
+                            // Display comparison in dedicated area above transcript
+                            const comparisonDisplay = document.getElementById('bible-comparison-display');
+                            comparisonDisplay.style.display = 'block';
+                            comparisonDisplay.innerHTML = `
+                                <div class="comparison-summary">
+                                    <strong>📊 Comparison Result:</strong> ${data.analysis}
+                                </div>
+                                ${tableHtml}
+                            `;
+                            
+                            // Also add to transcript for history
+                            this.addTranscript('user', userText);
+                            this.addTranscript('agent', 'Comparison table displayed above. ' + data.analysis);
+                        } else {
+                            // Fallback: if no table, just show the analysis text
+                            console.warn('No table HTML in response, showing text only');
+                            this.addTranscript('agent', data.analysis);
+                        }
+                        
+                        await this.speak(data.analysis);
+                    } else {
+                        throw new Error(data.error || 'Comparison failed');
+                    }
+                    
                 } else {
-                    throw new Error('No response');
+                    // Single translation mode
+                    const resp = await fetch(`${this.apiBase}/api/chat`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.sessionToken}`
+                        },
+                        body: JSON.stringify({
+                            question: userText,
+                            k: 3,
+                            include_sources: false
+                        })
+                    });
+                    
+                    if (!resp.ok) {
+                        console.error('Chat failed:', resp.status);
+                        throw new Error('Chat request failed');
+                    }
+                    
+                    const data = await resp.json();
+                    
+                    if (data.success) {
+                        this.addTranscript('agent', data.answer);
+                        await this.speak(data.answer);
+                    } else {
+                        throw new Error('No response');
+                    }
                 }
                 
             } catch (error) {
@@ -875,10 +1195,164 @@
                 clearTimeout(this.recordingTimeout);
             }
             
+            // Clear comparison display
+            const comparisonDisplay = document.getElementById('bible-comparison-display');
+            if (comparisonDisplay) {
+                comparisonDisplay.style.display = 'none';
+                comparisonDisplay.innerHTML = '';
+            }
+            
             document.getElementById('start-btn').disabled = false;
             document.getElementById('end-btn').disabled = true;
             document.getElementById('translation-select').disabled = false;
+            document.getElementById('compare-mode-btn').disabled = false;
             this.updateStatus('Conversation ended');
+        },
+
+        // Toggle between voice and text input modes
+        toggleInputMode(mode) {
+            this.textMode = (mode === 'text');
+            
+            const voiceBtn = document.querySelector('.mode-btn:first-child');
+            const textBtn = document.querySelector('.mode-btn:last-child');
+            const textContainer = document.getElementById('text-input-container');
+            const startBtn = document.getElementById('start-btn');
+            const endBtn = document.getElementById('end-btn');
+            const avatar = document.getElementById('bible-avatar');
+            const controls = document.querySelector('.bible-controls');
+            
+            if (this.textMode) {
+                // Switch to text mode - hide voice elements
+                voiceBtn.classList.remove('active');
+                textBtn.classList.add('active');
+                textContainer.classList.add('active');
+                controls.style.display = 'none';  // Hide Start/End buttons
+                avatar.style.display = 'none';  // Hide avatar
+                this.updateStatus('Type your question and click Send');
+            } else {
+                // Switch to voice mode - hide text elements
+                voiceBtn.classList.add('active');
+                textBtn.classList.remove('active');
+                textContainer.classList.remove('active');
+                controls.style.display = 'flex';  // Show Start/End buttons
+                avatar.style.display = 'block';  // Show avatar
+                if (this.currentTranslation) {
+                    this.updateStatus(`Ready: ${this.currentTranslation.name}. Click Start.`);
+                }
+            }
+        },
+
+        // Send text question (text mode)
+        async sendTextQuestion() {
+            const input = document.getElementById('bible-text-input');
+            const question = input.value.trim();
+            
+            if (!question) {
+                this.updateStatus('Please type a question first');
+                return;
+            }
+            
+            // Check if session exists
+            if (!this.sessionToken) {
+                // Create session if needed
+                const resp = await fetch(`${this.apiBase}/agent`);
+                const html = await resp.text();
+                const match = html.match(/SESSION_TOKEN.*?"([^"]+)"/);
+                if (match) {
+                    this.sessionToken = match[1];
+                    
+                    // Switch translation if in single mode
+                    if (!this.compareMode && this.currentTranslation) {
+                        await this.switchTranslation(this.currentTranslation.id, this.sessionToken);
+                    }
+                }
+            }
+            
+            // Add user's question to transcript
+            this.addTranscript('user', question);
+            
+            // Clear input
+            input.value = '';
+            
+            // Get response
+            await this.getChatResponse(question);
+        },
+
+        toggleCompareMode() {
+            this.compareMode = !this.compareMode;
+            
+            const compareBtn = document.getElementById('compare-mode-btn');
+            const translationSelect = document.getElementById('translation-select');
+            const selectorDiv = document.querySelector('.translation-selector');
+            const compareContainer = document.getElementById('compare-selections');
+            
+            if (this.compareMode) {
+                compareBtn.textContent = '📖 Single Mode';
+                compareBtn.classList.add('active');
+                selectorDiv.style.display = 'none';  // Hide single translation selector
+                compareContainer.style.display = 'block';  // Show comparison checkboxes
+                this.updateCompareUI();
+                this.updateStatus('Select 2-4 translations and click Start');
+            } else {
+                compareBtn.textContent = '🔄 Compare Translations';
+                compareBtn.classList.remove('active');
+                selectorDiv.style.display = 'block';  // Show single translation selector
+                compareContainer.style.display = 'none';  // Hide comparison checkboxes
+                this.selectedTranslationsForCompare = [];
+                
+                // Restore single mode status
+                if (this.currentTranslation) {
+                    this.updateStatus(`Ready: ${this.currentTranslation.name}. Click Start.`);
+                }
+            }
+        },
+
+        updateCompareUI() {
+            const container = document.getElementById('compare-selections');
+            container.innerHTML = '<p style="margin-bottom: 10px; font-weight: 600; color: #1E3A8A;">Select 2-4 translations to compare:</p>';
+            
+            this.availableTranslations.forEach(trans => {
+                const isSelected = this.selectedTranslationsForCompare.includes(trans.id);
+                
+                const label = document.createElement('label');
+                label.style.display = 'block';
+                label.style.marginBottom = '8px';
+                label.style.cursor = 'pointer';
+                label.innerHTML = `
+                    <input type="checkbox" 
+                           value="${trans.id}" 
+                           ${isSelected ? 'checked' : ''}
+                           onchange="BibleWidget.toggleTranslationForCompare('${trans.id}')"
+                           ${this.selectedTranslationsForCompare.length >= 4 && !isSelected ? 'disabled' : ''}>
+                    ${trans.name} (${trans.chunks} verses)
+                `;
+                
+                container.appendChild(label);
+            });
+        },
+
+        toggleTranslationForCompare(translationId) {
+            const index = this.selectedTranslationsForCompare.indexOf(translationId);
+            
+            if (index > -1) {
+                this.selectedTranslationsForCompare.splice(index, 1);
+            } else {
+                if (this.selectedTranslationsForCompare.length < 4) {
+                    this.selectedTranslationsForCompare.push(translationId);
+                }
+            }
+            
+            this.updateCompareUI();
+            
+            // Update status
+            const count = this.selectedTranslationsForCompare.length;
+            if (count === 0) {
+                this.updateStatus('Select 2-4 translations and click Start');
+            } else if (count === 1) {
+                this.updateStatus('Select at least 1 more translation');
+            } else {
+                this.updateStatus(`${count} translations selected. Click Start to compare.`);
+            }
         }
     };
     

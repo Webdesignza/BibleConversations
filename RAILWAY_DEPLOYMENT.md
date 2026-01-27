@@ -8,7 +8,7 @@ Complete guide to deploying your Multi-Translation Bible Study System to Railway
 
 ### 1. **Get Your API Keys**
 
-You need two API keys:
+You only need ONE API key - Groq (completely FREE!):
 
 #### Groq API Key (FREE)
 1. Visit https://console.groq.com
@@ -17,11 +17,7 @@ You need two API keys:
 4. Create a new key
 5. Copy it (starts with `gsk_...`)
 
-#### OpenAI API Key (for embeddings)
-1. Visit https://platform.openai.com
-2. Go to API Keys
-3. Create new key
-4. Copy it (starts with `sk-...`)
+**That's it! No OpenAI needed - 100% FREE!**
 
 ### 2. **Generate Secure API Key**
 
