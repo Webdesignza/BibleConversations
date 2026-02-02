@@ -1,4 +1,3 @@
-import os
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
@@ -6,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import secrets
 
 from app.core.config import get_settings
-from app.core.security import create_session
+from app.core.security import create_session  # ✅ ADD THIS
 from app.api.routes import chat, documents, translations
 
 settings = get_settings()
@@ -15,9 +14,7 @@ settings = get_settings()
 app = FastAPI(
     title="Bible Conversations API",
     description="Multi-Translation Bible Study System with RAG and Voice AI",
-    version="2.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    version="2.0.0"
 )
 
 # CORS middleware
@@ -120,11 +117,8 @@ async def agent():
     # Generate session token
     token = secrets.token_urlsafe(32)
     
-    # Register the session
+    # ✅ CRITICAL FIX: Register the session
     create_session(token)
-    
-    # Get the actual API base URL from environment or use localhost for local dev
-    api_base = os.getenv("API_BASE_URL", "http://127.0.0.1:8080")
     
     html = f"""
     <!DOCTYPE html>
@@ -133,7 +127,7 @@ async def agent():
         <title>Bible Study Agent</title>
         <script>
             const SESSION_TOKEN = "{token}";
-            const API_BASE = "{api_base}";
+            const API_BASE = "http://127.0.0.1:8009";
         </script>
         <style>
             body {{
@@ -168,45 +162,11 @@ async def agent():
     """
     return HTMLResponse(content=html)
 
-# Health check - CRITICAL for App Runner
+# Health check
 @app.get("/health")
 async def health_check():
-    """
-    Health check endpoint for AWS App Runner.
-    Must return 200 OK for the service to be considered healthy.
-    """
-    return {
-        "status": "healthy",
-        "service": "Bible Conversations",
-        "version": "2.0.0"
-    }
-
-# Startup event
-@app.on_event("startup")
-async def startup_event():
-    """
-    Initialize services on startup.
-    App Runner monitors this for successful startup.
-    """
-    print("🚀 Bible Conversations starting up...")
-    print(f"📍 PORT: {os.getenv('PORT', '8080')}")
-    print("✅ Ready to serve requests!")
-
-# Shutdown event
-@app.on_event("shutdown")
-async def shutdown_event():
-    """
-    Cleanup on shutdown.
-    """
-    print("👋 Bible Conversations shutting down...")
+    return {"status": "healthy", "service": "Bible Conversations"}
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8080))
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=port,
-        workers=1,
-        log_level="info"
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8009)
