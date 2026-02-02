@@ -1,29 +1,30 @@
 # ============================================================================
-# Bible Conversations - Optimized for Railway Free Tier
-# Faster builds with multi-stage build and caching
+# Bible Conversations - Optimized for AWS App Runner
+# Multi-stage build for minimal image size and faster cold starts
 # ============================================================================
 
 FROM python:3.11-slim as builder
 
-# Set working directory
 WORKDIR /app
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only requirements first for better caching
+# Copy requirements
 COPY requirements.txt .
 
-# Install dependencies with optimizations for faster build
+# Install Python dependencies to user site-packages
 RUN pip install --no-cache-dir --user \
     --timeout=1000 \
     --retries=10 \
     -r requirements.txt
 
 # ============================================================================
-# Final stage - smaller image
+# Final stage - Minimal runtime image
 # ============================================================================
 FROM python:3.11-slim
 
@@ -32,30 +33,40 @@ WORKDIR /app
 # Copy Python packages from builder
 COPY --from=builder /root/.local /root/.local
 
-# Install only runtime dependencies (no build tools)
+# Install only essential runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy application code
-COPY . .
+COPY app/ ./app/
+COPY static/ ./static/
 
-# Make sure scripts are in PATH
+# Add Python packages to PATH
 ENV PATH=/root/.local/bin:$PATH
 
 # Create necessary directories
 RUN mkdir -p chroma_db uploads static/images
 
-# Set environment variables
+# App Runner specific environment variables
 ENV PYTHONUNBUFFERED=1
-ENV PORT=8009
+ENV PYTHONDONTWRITEBYTECODE=1
 
-# Expose port
-EXPOSE 8009
+# App Runner uses PORT environment variable (defaults to 8080)
+ENV PORT=8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+# Expose port (App Runner ignores this but good for documentation)
+EXPOSE 8080
+
+# Health check for container health monitoring
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1
 
-# Start command
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT}
+# Start application with optimized settings for App Runner
+CMD uvicorn app.main:app \
+    --host 0.0.0.0 \
+    --port ${PORT} \
+    --workers 1 \
+    --loop uvloop \
+    --no-access-log

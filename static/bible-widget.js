@@ -1004,49 +1004,46 @@
                         body: JSON.stringify({
                             question: userText,
                             translation_ids: this.selectedTranslationsForCompare,
-                            k: 3,
+                            k: 1,  // CHANGE FROM 3 TO 1 for single verse comparisons
                             include_chunks: false
                         })
                     });
                     
                     if (!resp.ok) {
-                        console.error('Compare failed:', resp.status);
-                        throw new Error('Comparison request failed');
+                        const errorText = await resp.text();
+                        console.error('Compare failed:', resp.status, errorText);
+                        throw new Error(`Comparison request failed: ${resp.status}`);
                     }
                     
                     const data = await resp.json();
-                    
                     console.log('Comparison response:', data);
                     
-                    if (data.success) {
-                        // Add spoken text to transcript and speak it
-                        const tableHtml = data.table_html || '';
-                        
-                        console.log('Table HTML:', tableHtml);
-                        
-                        if (tableHtml) {
-                            // Display comparison in dedicated area above transcript
-                            const comparisonDisplay = document.getElementById('bible-comparison-display');
-                            comparisonDisplay.style.display = 'block';
-                            comparisonDisplay.innerHTML = `
-                                <div class="comparison-summary">
-                                    <strong>📊 Comparison Result:</strong> ${data.analysis}
-                                </div>
-                                ${tableHtml}
-                            `;
-                            
-                            // Also add to transcript for history
-                            this.addTranscript('user', userText);
-                            this.addTranscript('agent', 'Comparison table displayed above. ' + data.analysis);
-                        } else {
-                            // Fallback: if no table, just show the analysis text
-                            console.warn('No table HTML in response, showing text only');
-                            this.addTranscript('agent', data.analysis);
-                        }
-                        
-                        await this.speak(data.analysis);
-                    } else {
-                        throw new Error(data.error || 'Comparison failed');
+                    // Check for various response formats
+                    const answer = data.answer || data.analysis || data.comparison || '';
+                    const tableHtml = data.table_html || '';
+                    
+                    if (!answer && !tableHtml) {
+                        throw new Error('Empty response from comparison API');
+                    }
+                    
+                    // Display comparison in dedicated area above transcript
+                    if (tableHtml) {
+                        const comparisonDisplay = document.getElementById('bible-comparison-display');
+                        comparisonDisplay.style.display = 'block';
+                        comparisonDisplay.innerHTML = `
+                            <div class="comparison-summary">
+                                <strong>📊 Comparison Result:</strong> ${answer}
+                            </div>
+                            ${tableHtml}
+                        `;
+                    }
+                    
+                    // Add to transcript
+                    this.addTranscript('agent', answer || 'Comparison table displayed above.');
+                    
+                    // Speak in voice mode
+                    if (!this.textMode) {
+                        await this.speak(answer);
                     }
                     
                 } else {
@@ -1065,25 +1062,47 @@
                     });
                     
                     if (!resp.ok) {
-                        console.error('Chat failed:', resp.status);
-                        throw new Error('Chat request failed');
+                        const errorText = await resp.text();
+                        console.error('Chat failed:', resp.status, errorText);
+                        throw new Error(`Chat request failed: ${resp.status}`);
                     }
                     
                     const data = await resp.json();
+                    console.log('Chat response:', data);
                     
-                    if (data.success) {
-                        this.addTranscript('agent', data.answer);
-                        await this.speak(data.answer);
-                    } else {
-                        throw new Error('No response');
+                    // Check for answer in various formats
+                    const answer = data.answer || data.response || data.text || '';
+                    
+                    if (!answer) {
+                        throw new Error('Empty response from chat API');
                     }
+                    
+                    this.addTranscript('agent', answer);
+                    
+                    // Speak in voice mode
+                    if (!this.textMode) {
+                        await this.speak(answer);
+                    }
+                }
+                
+                // Success - ready for next input
+                this.isProcessing = false;
+                
+                if (this.textMode) {
+                    this.updateStatus('Ready for next question');
+                } else if (this.conversationActive && !this.isRecording) {
+                    setTimeout(() => this.startListening(), 1000);
                 }
                 
             } catch (error) {
                 console.error('Chat error:', error);
-                this.updateStatus('Error getting response');
+                this.updateStatus('Error getting response: ' + error.message);
+                this.addTranscript('agent', 'Sorry, I encountered an error: ' + error.message);
                 this.isProcessing = false;
-                setTimeout(() => this.startListening(), 2000);
+                
+                if (!this.textMode && this.conversationActive && !this.isRecording) {
+                    setTimeout(() => this.startListening(), 2000);
+                }
             }
         },
         
@@ -1285,24 +1304,50 @@
             const translationSelect = document.getElementById('translation-select');
             const selectorDiv = document.querySelector('.translation-selector');
             const compareContainer = document.getElementById('compare-selections');
+            const comparisonDisplay = document.getElementById('bible-comparison-display');
+            const transcript = document.getElementById('bible-transcript');
             
             if (this.compareMode) {
+                // Entering compare mode
                 compareBtn.textContent = '📖 Single Mode';
                 compareBtn.classList.add('active');
-                selectorDiv.style.display = 'none';  // Hide single translation selector
-                compareContainer.style.display = 'block';  // Show comparison checkboxes
+                selectorDiv.style.display = 'none';
+                compareContainer.style.display = 'block';
                 this.updateCompareUI();
                 this.updateStatus('Select 2-4 translations and click Start');
+                
+                // Clear any existing content
+                if (comparisonDisplay) {
+                    comparisonDisplay.style.display = 'none';
+                    comparisonDisplay.innerHTML = '';
+                }
+                if (transcript) {
+                    transcript.innerHTML = '';
+                    transcript.style.display = 'none';
+                }
             } else {
+                // Exiting compare mode
                 compareBtn.textContent = '🔄 Compare Translations';
                 compareBtn.classList.remove('active');
-                selectorDiv.style.display = 'block';  // Show single translation selector
-                compareContainer.style.display = 'none';  // Hide comparison checkboxes
+                selectorDiv.style.display = 'block';
+                compareContainer.style.display = 'none';
                 this.selectedTranslationsForCompare = [];
+                
+                // CRITICAL: Clear comparison display and transcript
+                if (comparisonDisplay) {
+                    comparisonDisplay.style.display = 'none';
+                    comparisonDisplay.innerHTML = '';
+                }
+                if (transcript) {
+                    transcript.innerHTML = '';
+                    transcript.style.display = 'none';
+                }
                 
                 // Restore single mode status
                 if (this.currentTranslation) {
                     this.updateStatus(`Ready: ${this.currentTranslation.name}. Click Start.`);
+                } else {
+                    this.updateStatus('Select a translation and click Start');
                 }
             }
         },

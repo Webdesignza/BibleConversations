@@ -3,97 +3,451 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bible Conversations - Interactive Study</title>
+    <title>Bible Conversations - Free Interactive Bible Study with AI</title>
+    <meta name="description" content="Free AI-powered Bible study assistant. Compare translations, explore scripture, and deepen your faith - all at no cost.">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         body {
             font-family: 'Georgia', serif;
-            margin: 0;
-            padding: 40px;
-            background: linear-gradient(135deg, #f0f9ff 0%, #fef3c7 100%);
+            background: linear-gradient(135deg, #1E3A8A 0%, #D97706 100%);
+            min-height: 100vh;
+            padding: 20px;
         }
         
-        .demo-content {
-            max-width: 800px;
+        .container {
+            max-width: 1200px;
             margin: 0 auto;
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
         
-        h1 {
+        .header {
+            text-align: center;
+            color: white;
+            padding: 40px 20px;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header .tagline {
+            font-size: 1.3em;
+            opacity: 0.95;
+            font-style: italic;
+        }
+        
+        .main-content {
+            background: white;
+            border-radius: 20px;
+            padding: 50px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        
+        .verse-banner {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-left: 6px solid #1E3A8A;
+            padding: 30px;
+            margin: 30px 0;
+            border-radius: 10px;
+            font-size: 1.2em;
+            line-height: 1.8;
+            font-style: italic;
             color: #1E3A8A;
-            font-size: 2.5em;
-            margin-bottom: 20px;
+        }
+        
+        .verse-banner strong {
+            display: block;
+            margin-top: 15px;
+            font-style: normal;
+            color: #D97706;
         }
         
         h2 {
+            color: #1E3A8A;
+            font-size: 2em;
+            margin: 40px 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #D97706;
+        }
+        
+        h3 {
             color: #D97706;
-            font-size: 1.8em;
-            margin-top: 30px;
+            font-size: 1.5em;
+            margin: 30px 0 15px 0;
         }
         
         p {
             line-height: 1.8;
             color: #374151;
             font-size: 1.1em;
+            margin-bottom: 15px;
         }
         
-        .verse {
-            background: #f0f9ff;
-            border-left: 4px solid #1E3A8A;
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin: 30px 0;
+        }
+        
+        .feature-card {
+            background: linear-gradient(135deg, #f0f9ff 0%, #fef3c7 100%);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        
+        .feature-card .icon {
+            font-size: 2.5em;
+            margin-bottom: 15px;
+        }
+        
+        .feature-card h3 {
+            color: #1E3A8A;
+            font-size: 1.3em;
+            margin: 10px 0;
+            border: none;
+        }
+        
+        .feature-card p {
+            font-size: 1em;
+            color: #4b5563;
+        }
+        
+        .cta-section {
+            background: linear-gradient(135deg, #1E3A8A 0%, #D97706 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            margin: 40px 0;
+        }
+        
+        .cta-section h2 {
+            color: white;
+            border: none;
+            margin: 0 0 20px 0;
+        }
+        
+        .cta-section p {
+            color: white;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+        
+        .cta-button {
+            background: white;
+            color: #1E3A8A;
+            padding: 15px 40px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .cta-button:hover {
+            transform: scale(1.05);
+        }
+        
+        .free-banner {
+            background: #10b981;
+            color: white;
             padding: 20px;
-            margin: 20px 0;
+            border-radius: 10px;
+            text-align: center;
+            margin: 30px 0;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        
+        .support-section {
+            background: #fef3c7;
+            padding: 30px;
+            border-radius: 15px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        
+        .support-section h3 {
+            color: #1E3A8A;
+            margin-bottom: 15px;
+        }
+        
+        .support-section p {
+            color: #374151;
+            margin-bottom: 20px;
+        }
+        
+        .donate-button {
+            background: linear-gradient(135deg, #D97706 0%, #F59E0B 100%);
+            color: white;
+            padding: 15px 40px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.3s;
+            box-shadow: 0 4px 15px rgba(217, 119, 6, 0.3);
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .donate-button:hover {
+            transform: scale(1.05);
+        }
+        
+        .how-it-works {
+            margin: 40px 0;
+        }
+        
+        .steps {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            margin: 30px 0;
+        }
+        
+        .step {
+            flex: 1;
+            min-width: 200px;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .step-number {
+            background: linear-gradient(135deg, #1E3A8A 0%, #D97706 100%);
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8em;
+            font-weight: bold;
+            margin: 0 auto 15px auto;
+        }
+        
+        .step h4 {
+            color: #1E3A8A;
+            margin: 15px 0 10px 0;
+        }
+        
+        .step p {
+            font-size: 0.95em;
+            color: #6b7280;
+        }
+        
+        .footer {
+            text-align: center;
+            color: white;
+            padding: 30px 20px;
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .ad-space {
+            background: #f3f4f6;
+            border: 2px dashed #d1d5db;
+            padding: 40px;
+            text-align: center;
+            border-radius: 10px;
+            margin: 30px 0;
+            color: #6b7280;
             font-style: italic;
         }
         
-        .feature-list {
-            list-style: none;
-            padding: 0;
-        }
-        
-        .feature-list li {
-            padding: 10px 0;
-            padding-left: 30px;
-            position: relative;
-        }
-        
-        .feature-list li:before {
-            content: "📖";
-            position: absolute;
-            left: 0;
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .main-content {
+                padding: 30px 20px;
+            }
+            
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="demo-content">
-        <h1>📖 Bible Conversations</h1>
-        
-        <p>Welcome to our interactive Bible study platform! This demo page shows how our AI-powered Bible study assistant can be seamlessly embedded on any website.</p>
-        
-        <div class="verse">
-            "All Scripture is God-breathed and is useful for teaching, rebuking, correcting and training in righteousness."<br>
-            <strong>- 2 Timothy 3:16 (NIV)</strong>
+    <div class="container">
+        <div class="header">
+            <h1>📖 Bible Conversations</h1>
+            <p class="tagline">Your Free AI-Powered Bible Study Companion</p>
         </div>
         
-        <h2>Explore Different Translations</h2>
-        <p>Our Bible study assistant helps you understand the nuances between different Bible translations, providing scholarly insights and historical context.</p>
+        <div class="main-content">
+            <div class="free-banner">
+                ✨ 100% FREE TO USE - No Subscriptions, No Hidden Fees ✨
+            </div>
+            
+            <p style="font-size: 1.2em; text-align: center; color: #1E3A8A; margin: 30px 0;">
+                Dive deeper into Scripture with our intelligent Bible study assistant. Compare translations, explore passages, and grow in your faith - completely free, forever.
+            </p>
+            
+            <div class="verse-banner">
+                "Your word is a lamp for my feet, a light on my path."
+                <strong>- Psalm 119:105 (NIV)</strong>
+            </div>
+            
+            <h2>✨ What Makes Us Special</h2>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="icon">🎤</div>
+                    <h3>Voice & Text Modes</h3>
+                    <p>Talk naturally to our AI assistant or type your questions - whatever feels comfortable for your study time.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="icon">📚</div>
+                    <h3>Multi-Translation Support</h3>
+                    <p>Explore KJV, NIV, ESV, and more translations. See the same verse in different translations side-by-side.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="icon">🔍</div>
+                    <h3>Smart Verse Search</h3>
+                    <p>Ask naturally: "What does John 3:16 say?" or "Tell me about Genesis 6 verse 4" - we understand both!</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="icon">🔄</div>
+                    <h3>Compare Translations</h3>
+                    <p>See how different translations word the same passage. Perfect for deep study and understanding nuances.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="icon">📖</div>
+                    <h3>Unbiased Scripture Focus</h3>
+                    <p>Get exactly what the Bible says, without interpretation or commentary - pure Scripture, faithfully delivered.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="icon">💯</div>
+                    <h3>Always Free</h3>
+                    <p>Powered by completely free AI technology. No subscriptions, no credit cards, no limits on usage.</p>
+                </div>
+            </div>
+            
+            <div class="how-it-works">
+                <h2>📋 How It Works</h2>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <h4>Click the Button</h4>
+                        <p>Look for the "📖 Talk to Bible AI" button in the bottom-right corner</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <h4>Choose Your Mode</h4>
+                        <p>Select voice or text mode, and pick your preferred translation</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <h4>Start Exploring</h4>
+                        <p>Ask questions, compare translations, or explore specific passages</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="cta-section">
+                <h2>🚀 Ready to Deepen Your Faith?</h2>
+                <p>Look for the blue and gold button in the bottom-right corner to start your Bible study journey!</p>
+                <p style="font-size: 1em; margin-top: 20px; opacity: 0.9;">
+                    Try asking: "Compare John 3:16 in KJV and NIV" or "What does the Bible say about love?"
+                </p>
+            </div>
+            
+            <!-- Ad Space Placeholder -->
+            <div class="ad-space">
+                <p>📢 Advertisement Space</p>
+                <p style="font-size: 0.9em; margin-top: 10px;">Ads help us keep this service free for everyone</p>
+            </div>
+            
+            <div class="support-section">
+                <h3>❤️ Support This Free Ministry</h3>
+                <p>Bible Conversations is completely free and always will be. If you find this tool valuable for your faith journey, consider supporting us to keep the lights on and help us reach more people.</p>
+                <p style="font-size: 0.95em; color: #6b7280;">Your donations help cover server costs and keep this ministry accessible to everyone worldwide.</p>
+                <a href="#" class="donate-button">💝 Support Us with a Donation</a>
+                <p style="font-size: 0.85em; color: #6b7280; margin-top: 15px;">Every contribution, no matter how small, makes a difference!</p>
+            </div>
+            
+            <h2>🌟 Example Questions to Ask</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>Specific Verses</h3>
+                    <p>"What does John 3:16 say?"<br>"Read Psalm 23"<br>"Show me Romans 8:28"</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h3>Translation Comparison</h3>
+                    <p>"Compare John 3:16 in KJV and NIV"<br>"Show Genesis 1:1 in different translations"</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h3>Topical Study</h3>
+                    <p>"What does the Bible say about love?"<br>"Find verses about faith"<br>"Teach me about forgiveness"</p>
+                </div>
+            </div>
+            
+            <h2>💡 Why We Built This</h2>
+            <p>We believe everyone should have free access to Bible study tools that make Scripture more accessible and understandable. Our mission is to help people grow in their faith by providing a modern, AI-powered way to explore God's Word.</p>
+            
+            <p>Traditional Bible study apps often require expensive subscriptions or show intrusive ads. We wanted to create something different - a completely free tool that respects your study time and makes the Bible more accessible to everyone, everywhere.</p>
+            
+            <div class="verse-banner">
+                "For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life."
+                <strong>- John 3:16 (NIV)</strong>
+            </div>
+            
+            <h2>🔒 Privacy & Trust</h2>
+            <p><strong>Your conversations are private.</strong> We don't store your Bible study questions or track your usage. Our AI assistant processes your questions in real-time and doesn't keep any history.</p>
+            
+            <p><strong>No accounts required.</strong> Jump in and start studying immediately - no email, no password, no tracking.</p>
+            
+            <p><strong>Scripture-focused.</strong> Our AI provides what the Bible says without adding interpretation or doctrine. For deeper theological questions, we encourage you to consult with your pastor or spiritual advisor.</p>
+            
+            <!-- Another Ad Space -->
+            <div class="ad-space">
+                <p>📢 Advertisement Space</p>
+                <p style="font-size: 0.9em; margin-top: 10px;">Ads help us keep this service free for everyone</p>
+            </div>
+            
+            <div style="background: #e0f2fe; padding: 30px; border-radius: 15px; margin-top: 40px; text-align: center;">
+                <h3 style="color: #1E3A8A; margin-bottom: 15px;">📖 Start Your Bible Study Journey Today</h3>
+                <p style="color: #374151; font-size: 1.1em;">Click the "📖 Talk to Bible AI" button in the bottom-right corner!</p>
+                <p style="color: #6b7280; font-size: 0.9em; margin-top: 15px;">Works on desktop, tablet, and mobile devices</p>
+            </div>
+        </div>
         
-        <h2>Features</h2>
-        <ul class="feature-list">
-            <li>Voice-enabled conversations about Bible passages</li>
-            <li>Compare translations side-by-side</li>
-            <li>Understand historical and linguistic context</li>
-            <li>Explore scholarly interpretations</li>
-            <li>Get answers to your Bible study questions</li>
-        </ul>
-        
-        <h2>Try It Now!</h2>
-        <p><strong>Look for the blue and gold button in the bottom-right corner</strong> to start a conversation with our Bible study assistant. You can ask questions about specific verses, compare translations, or learn about biblical context.</p>
-        
-        <p style="margin-top: 40px; color: #6b7280; font-size: 0.9em;">
-            This is a demonstration of how the Bible Conversations widget can be embedded on any webpage with just one line of code.
-        </p>
+        <div class="footer">
+            <p>Bible Conversations - A Free Ministry Tool</p>
+            <p style="margin-top: 10px; font-size: 0.9em;">Built with ❤️ to help people grow in faith | Powered by free AI technology</p>
+            <p style="margin-top: 10px; font-size: 0.85em;">This tool provides Scripture text without interpretation. For theological guidance, please consult your pastor or spiritual advisor.</p>
+        </div>
     </div>
     
     <!-- Embed Bible Study Widget -->

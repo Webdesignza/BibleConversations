@@ -1,13 +1,14 @@
 """
 RAG Query Service - Multi-Translation Bible Assistant
 Handles retrieval and generation for Bible study questions across multiple translations
-UPDATED: Completely unbiased, text-only responses + Translation Comparison
+UPDATED: Completely unbiased, text-only responses + Smart Translation Comparison
 """
 
 from typing import List, Dict, Optional
 import traceback
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -244,19 +245,156 @@ class RAGService:
             metadata[translation_id]['chunks'] = chunk_count
             self._save_translations_metadata(metadata)
     
+   
+    def _extract_verse_reference(self, query: str) -> Optional[Dict[str, any]]:
+        """
+        Extract exact Bible reference from query
+        Handles multiple formats:
+        - "John 3:16" (standard)
+        - "John 3 verse 16" (natural language)
+        - "John chapter 3 verse 16" (verbose)
+        - "1 John 2:5" (numbered books)
+        """
+        
+        # Patterns for Bible references (in order of specificity)
+        patterns = [
+            # "John 3:16" or "John 3:16-18" (standard format with colon)
+            r'(\d?\s*[A-Za-z]+(?:\s+[A-Za-z]+)?)\s+(\d+):(\d+)(?:-(\d+))?',
+            
+            # "John 3 verse 16" or "John chapter 3 verse 16" (natural language)
+            r'(\d?\s*[A-Za-z]+(?:\s+[A-Za-z]+)?)\s+(?:chapter\s+)?(\d+)\s+verse\s+(\d+)(?:\s+to\s+(\d+))?',
+            
+            # "John 3 verses 16 to 18" (plural verses)
+            r'(\d?\s*[A-Za-z]+(?:\s+[A-Za-z]+)?)\s+(?:chapter\s+)?(\d+)\s+verses\s+(\d+)(?:\s+to\s+)?(\d+)?',
+            
+            # "John 3 16" (space-separated)
+            r'(\d?\s*[A-Za-z]+(?:\s+[A-Za-z]+)?)\s+(\d+)\s+(\d+)(?:-(\d+))?(?:\s|$)',
+            
+            # "John 10" (whole chapter)
+            r'(\d?\s*[A-Za-z]+(?:\s+[A-Za-z]+)?)\s+(?:chapter\s+)?(\d+)(?:\s|$)(?![\d:])',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, query, re.IGNORECASE)
+            if match:
+                groups = match.groups()
+                book = groups[0].strip()
+                chapter = int(groups[1])
+                
+                if len(groups) >= 3 and groups[2]:
+                    # Specific verse(s)
+                    verse_start = int(groups[2])
+                    verse_end = int(groups[3]) if len(groups) >= 4 and groups[3] else verse_start
+                else:
+                    # Whole chapter requested
+                    verse_start = 1
+                    verse_end = 999  # Get all verses in chapter
+                
+                reference = f"{book} {chapter}:{verse_start}"
+                if verse_end != verse_start and verse_end != 999:
+                    reference += f"-{verse_end}"
+                
+                print(f"🔍 Extracted verse reference: {reference}")
+                
+                return {
+                    'book': book,
+                    'chapter': chapter,
+                    'verse_start': verse_start,
+                    'verse_end': verse_end,
+                    'reference': reference
+                }
+        
+        print(f"⚠️ Could not extract verse reference from: '{query}'")
+        return None
+
     
     def _retrieve_relevant_chunks(self, query: str, k: int = None) -> List[Dict]:
-        """Retrieve most relevant Bible translation chunks for a query"""
+        """Retrieve most relevant Bible chunks - with exact verse matching"""
         if not self.vectorstore:
             return []
         
         if k is None:
             k = settings.RETRIEVAL_K
         
-        results = self.vectorstore.similarity_search_with_score(query, k=k)
+        # Try to extract exact verse reference
+        verse_ref = self._extract_verse_reference(query)
+        
+        if verse_ref:
+            print(f"Searching for exact reference: {verse_ref['reference']}")
+            
+            book_variations = [
+                verse_ref['book'],
+                f"Gospel of {verse_ref['book']}",
+                f"{verse_ref['book']}'s Gospel",
+                verse_ref['book'].lower(),
+                verse_ref['book'].title(),
+            ]
+            
+            filtered_results = []
+            
+            for book_name in book_variations:
+                try:
+                    # Search with book and chapter filter
+                    results = self.vectorstore.similarity_search(
+                        verse_ref['reference'],
+                        k=k * 5,
+                        filter={
+                            "$and": [
+                                {"book": {"$eq": book_name}},
+                                {"chapter": {"$eq": verse_ref['chapter']}}
+                            ]
+                        }
+                    )
+                    
+                    if results:
+                        print(f"✓ Found {len(results)} matches with book name: {book_name}")
+                        
+                        # CRITICAL FIX: Only include verses that EXACTLY match the range
+                        for doc in results:
+                            doc_verse_start = doc.metadata.get('verse_start', 0)
+                            doc_verse_end = doc.metadata.get('verse_end', doc_verse_start)
+                            
+                            # MUST be within the exact range, no partial overlaps
+                            if (doc_verse_start >= verse_ref['verse_start'] and 
+                                doc_verse_start <= verse_ref['verse_end'] and
+                                doc_verse_end >= verse_ref['verse_start'] and 
+                                doc_verse_end <= verse_ref['verse_end']):
+                                filtered_results.append((doc, 1.0))
+                        
+                        if filtered_results:
+                            break
+                
+                except Exception as e:
+                    print(f"Filter search failed for '{book_name}': {e}")
+                    continue
+            
+            if filtered_results:
+                print(f"✓ Found {len(filtered_results)} exact matches")
+                # Sort by verse start AND limit to exact requested verses
+                filtered_results.sort(key=lambda x: x[0].metadata.get('verse_start', 0))
+                
+                # CRITICAL: Only return verses in the exact range
+                exact_matches = []
+                for doc, score in filtered_results:
+                    v_start = doc.metadata.get('verse_start', 0)
+                    if verse_ref['verse_start'] <= v_start <= verse_ref['verse_end']:
+                        exact_matches.append((doc, score))
+                
+                results = exact_matches[:k] if exact_matches else filtered_results[:k]
+            else:
+                print(f"✗ No exact matches found, trying semantic search")
+                results = self.vectorstore.similarity_search_with_score(query, k=k)
+        else:
+            print("Using semantic search (no exact reference found)")
+            results = self.vectorstore.similarity_search_with_score(query, k=k)
         
         retrieved_chunks = []
-        for doc, score in results:
+        for item in results:
+            if isinstance(item, tuple):
+                doc, score = item
+            else:
+                doc, score = item, 1.0
+            
             retrieved_chunks.append({
                 'content': doc.page_content,
                 'score': float(score),
@@ -373,14 +511,7 @@ YOUR RESPONSE (Bible text only, no interpretation, natural verse ranges):"""
     def compare_translations(self, question: str, translation_ids: List[str], k: int = None) -> Dict:
         """
         Compare the same passage across multiple Bible translations
-        
-        Args:
-            question: The Bible question/passage to look up
-            translation_ids: List of translation IDs to compare (e.g., ['kjv', 'niv', 'esv'])
-            k: Number of chunks to retrieve per translation
-            
-        Returns:
-            Dictionary with comparison results from each translation
+        NOW HANDLES BOTH: Specific verse requests AND topical searches
         """
         try:
             if not translation_ids or len(translation_ids) < 2:
@@ -402,82 +533,21 @@ YOUR RESPONSE (Bible text only, no interpretation, natural verse ranges):"""
                         'comparisons': []
                     }
             
-            # Retrieve passages from each translation
-            comparisons = []
+            if k is None:
+                k = settings.RETRIEVAL_K
             
-            for trans_id in translation_ids:
-                # Load this translation's vector store
-                translation_path = self.chroma_base_path / trans_id
-                vectorstore = Chroma(
-                    persist_directory=str(translation_path),
-                    embedding_function=self.embeddings
-                )
-                
-                # Retrieve relevant chunks
-                if k is None:
-                    k = settings.RETRIEVAL_K
-                
-                results = vectorstore.similarity_search_with_score(question, k=k)
-                
-                retrieved_chunks = []
-                for doc, score in results:
-                    retrieved_chunks.append({
-                        'content': doc.page_content,
-                        'score': float(score),
-                        'metadata': doc.metadata
-                    })
-                
-                # Get translation info
-                trans_info = metadata[trans_id]
-                
-                comparisons.append({
-                    'translation_id': trans_id,
-                    'translation_name': trans_info.get('name', trans_id),
-                    'chunks': retrieved_chunks,
-                    'num_chunks': len(retrieved_chunks)
-                })
+            # Check if this is a specific verse request or topical search
+            verse_ref = self._extract_verse_reference(question)
             
-            # Generate comparison analysis using Groq
-            comparison_prompt = self._build_comparison_prompt(question, comparisons)
-            
-            chat_completion = self.groq_client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "user",
-                        "content": comparison_prompt
-                    }
-                ],
-                model=settings.CHAT_MODEL,
-                temperature=settings.TEMPERATURE,
-            )
-            
-            full_response = chat_completion.choices[0].message.content
-            
-            # Parse the response to separate spoken and table parts
-            spoken_text = ""
-            table_html = ""
-            
-            if "[SPOKEN]:" in full_response and "[TABLE]:" in full_response:
-                parts = full_response.split("[TABLE]:")
-                spoken_part = parts[0].replace("[SPOKEN]:", "").strip()
-                table_part = parts[1].strip()
-                
-                spoken_text = spoken_part
-                table_html = table_part
+            if verse_ref:
+                # SPECIFIC VERSE: Fetch the SAME verse from all translations
+                print(f"📖 Specific verse comparison: {verse_ref['reference']}")
+                return self._compare_specific_verses(question, translation_ids, verse_ref, k, metadata)
             else:
-                # Fallback if AI doesn't follow format perfectly
-                spoken_text = full_response
-                table_html = ""
-            
-            return {
-                'success': True,
-                'question': question,
-                'analysis': spoken_text,  # This gets spoken
-                'table_html': table_html,  # This gets displayed
-                'comparisons': comparisons,
-                'num_translations': len(comparisons)
-            }
-            
+                # TOPICAL SEARCH: Find verses in ONE translation, then fetch same verses from others
+                print(f"🔍 Topical comparison for: {question}")
+                return self._compare_topical_search(question, translation_ids, k, metadata)
+                
         except Exception as e:
             print(f"Comparison Error: {str(e)}")
             print(f"Traceback:\n{traceback.format_exc()}")
@@ -489,6 +559,226 @@ YOUR RESPONSE (Bible text only, no interpretation, natural verse ranges):"""
             }
     
     
+    def _compare_specific_verses(self, question: str, translation_ids: List[str], 
+                                 verse_ref: Dict, k: int, metadata: Dict) -> Dict:
+        """Compare a specific verse/passage across translations"""
+        comparisons = []
+        
+        for trans_id in translation_ids:
+            try:
+                # Load translation's vector store
+                translation_path = self.chroma_base_path / trans_id
+                vectorstore = Chroma(
+                    persist_directory=str(translation_path),
+                    embedding_function=self.embeddings
+                )
+                
+                # Search for the SPECIFIC verse using metadata filter
+                book_variations = [
+                    verse_ref['book'],
+                    f"Gospel of {verse_ref['book']}",
+                    f"{verse_ref['book']}'s Gospel",
+                ]
+                
+                retrieved_chunks = []
+                for book_name in book_variations:
+                    try:
+                        results = vectorstore.similarity_search(
+                            verse_ref['reference'],
+                            k=k * 3,
+                            filter={
+                                "$and": [
+                                    {"book": {"$eq": book_name}},
+                                    {"chapter": {"$eq": verse_ref['chapter']}}
+                                ]
+                            }
+                        )
+                        
+                        # Filter to exact verse range
+                        for doc in results:
+                            doc_v_start = doc.metadata.get('verse_start', 0)
+                            doc_v_end = doc.metadata.get('verse_end', doc_v_start)
+                            
+                            if (doc_v_start >= verse_ref['verse_start'] and 
+                                doc_v_start <= verse_ref['verse_end']):
+                                retrieved_chunks.append({
+                                    'content': doc.page_content,
+                                    'score': 1.0,
+                                    'metadata': doc.metadata
+                                })
+                        
+                        if retrieved_chunks:
+                            break
+                            
+                    except Exception as e:
+                        continue
+                
+                trans_info = metadata[trans_id]
+                comparisons.append({
+                    'translation_id': trans_id,
+                    'translation_name': trans_info.get('name', trans_id),
+                    'chunks': retrieved_chunks,
+                    'num_chunks': len(retrieved_chunks),
+                    'has_results': len(retrieved_chunks) > 0
+                })
+                
+                print(f"✓ {trans_info.get('name', trans_id)}: Found {len(retrieved_chunks)} chunks")
+                
+            except Exception as e:
+                print(f"❌ Error retrieving {trans_id}: {e}")
+                comparisons.append({
+                    'translation_id': trans_id,
+                    'translation_name': metadata.get(trans_id, {}).get('name', trans_id),
+                    'chunks': [],
+                    'num_chunks': 0,
+                    'has_results': False,
+                    'error': str(e)
+                })
+        
+        # Generate comparison
+        comparison_prompt = self._build_comparison_prompt(question, comparisons)
+        chat_completion = self.groq_client.chat.completions.create(
+            messages=[{"role": "user", "content": comparison_prompt}],
+            model=settings.CHAT_MODEL,
+            temperature=settings.TEMPERATURE,
+        )
+        
+        full_response = chat_completion.choices[0].message.content
+        
+        # Parse response
+        spoken_text, table_html = self._parse_comparison_response(full_response)
+        
+        return {
+            'success': True,
+            'question': question,
+            'analysis': spoken_text,
+            'table_html': table_html,
+            'comparisons': comparisons,
+            'num_translations': len(comparisons)
+        }
+    
+    
+    def _compare_topical_search(self, question: str, translation_ids: List[str], 
+                                k: int, metadata: Dict) -> Dict:
+        """
+        Compare topical search across translations
+        Strategy: Search in first translation, extract verse refs, fetch from all
+        """
+        
+        # Step 1: Do semantic search in FIRST translation to find relevant verses
+        first_trans_id = translation_ids[0]
+        translation_path = self.chroma_base_path / first_trans_id
+        vectorstore = Chroma(
+            persist_directory=str(translation_path),
+            embedding_function=self.embeddings
+        )
+        
+        # Get relevant verses from first translation
+        results = vectorstore.similarity_search_with_score(question, k=min(k, 3))
+        
+        if not results:
+            return {
+                'success': False,
+                'question': question,
+                'error': 'Could not find relevant passages for comparison',
+                'comparisons': []
+            }
+        
+        # Step 2: Extract verse references from results
+        verse_references = []
+        for doc, score in results:
+            meta = doc.metadata
+            if 'book' in meta and 'chapter' in meta and 'verse_start' in meta:
+                verse_ref = {
+                    'book': meta['book'],
+                    'chapter': meta['chapter'],
+                    'verse_start': meta['verse_start'],
+                    'verse_end': meta.get('verse_end', meta['verse_start']),
+                    'reference': f"{meta['book']} {meta['chapter']}:{meta['verse_start']}"
+                }
+                if verse_ref['verse_end'] != verse_ref['verse_start']:
+                    verse_ref['reference'] += f"-{verse_ref['verse_end']}"
+                verse_references.append(verse_ref)
+        
+        print(f"📚 Found {len(verse_references)} relevant passages to compare")
+        
+        # Step 3: Fetch these SAME verses from ALL translations
+        all_comparisons = []
+        
+        for verse_ref in verse_references:
+            verse_comparison = {
+                'reference': verse_ref['reference'],
+                'translations': {}
+            }
+            
+            for trans_id in translation_ids:
+                trans_path = self.chroma_base_path / trans_id
+                vectorstore = Chroma(
+                    persist_directory=str(trans_path),
+                    embedding_function=self.embeddings
+                )
+                
+                # Search for this specific verse
+                book_variations = [
+                    verse_ref['book'],
+                    f"Gospel of {verse_ref['book']}",
+                    f"{verse_ref['book']}'s Gospel",
+                ]
+                
+                found_content = None
+                for book_name in book_variations:
+                    try:
+                        results = vectorstore.similarity_search(
+                            verse_ref['reference'],
+                            k=5,
+                            filter={
+                                "$and": [
+                                    {"book": {"$eq": book_name}},
+                                    {"chapter": {"$eq": verse_ref['chapter']}}
+                                ]
+                            }
+                        )
+                        
+                        for doc in results:
+                            doc_v_start = doc.metadata.get('verse_start', 0)
+                            if verse_ref['verse_start'] <= doc_v_start <= verse_ref['verse_end']:
+                                found_content = doc.page_content
+                                break
+                        
+                        if found_content:
+                            break
+                    except:
+                        continue
+                
+                verse_comparison['translations'][trans_id] = {
+                    'name': metadata[trans_id].get('name', trans_id),
+                    'content': found_content or "Not found"
+                }
+            
+            all_comparisons.append(verse_comparison)
+        
+        # Step 4: Build special prompt for multiple verse comparison
+        comparison_prompt = self._build_topical_comparison_prompt(question, all_comparisons, translation_ids, metadata)
+        
+        chat_completion = self.groq_client.chat.completions.create(
+            messages=[{"role": "user", "content": comparison_prompt}],
+            model=settings.CHAT_MODEL,
+            temperature=settings.TEMPERATURE,
+        )
+        
+        full_response = chat_completion.choices[0].message.content
+        spoken_text, table_html = self._parse_comparison_response(full_response)
+        
+        return {
+            'success': True,
+            'question': question,
+            'analysis': spoken_text,
+            'table_html': table_html,
+            'comparisons': all_comparisons,
+            'num_translations': len(translation_ids)
+        }
+    
+    
     def _build_comparison_prompt(self, question: str, comparisons: List[Dict]) -> str:
         """Build prompt for comparing multiple translations with table format"""
         
@@ -496,12 +786,17 @@ YOUR RESPONSE (Bible text only, no interpretation, natural verse ranges):"""
         translation_texts = []
         for comp in comparisons:
             trans_name = comp['translation_name']
-            context = "\n".join([chunk['content'] for chunk in comp['chunks']])
-            translation_texts.append(f"=== {trans_name} ===\n{context}")
+            
+            if comp.get('has_results', True) and comp['chunks']:
+                context = "\n".join([chunk['content'] for chunk in comp['chunks']])
+                translation_texts.append(f"=== {trans_name} ===\n{context}")
+            else:
+                # Include even if no results found
+                translation_texts.append(f"=== {trans_name} ===\n(No matching passage found)")
         
         combined_context = "\n\n".join(translation_texts)
         
-        # Get translation names for the table
+        # Get translation names for the table - INCLUDE ALL
         trans_names = [comp['translation_name'] for comp in comparisons]
         
         prompt = f"""You are comparing Bible translations. You MUST provide your response in this EXACT format:
@@ -518,38 +813,102 @@ BIBLE TEXT FROM EACH TRANSLATION:
 
 PART 1 - SPOKEN SUMMARY:
 Start with "[SPOKEN]:" then write a brief 2-3 sentence summary.
-Example: "Here's John 3:16 from the KJV, NIV, and ESV. The KJV uses 'only begotten Son', while the NIV and ESV use 'one and only Son'. The rest of the wording is very similar."
+If some translations don't have the passage, mention this in your summary.
 
 PART 2 - HTML TABLE:
-Start with "[TABLE]:" then create an HTML table showing the verses side-by-side.
+Start with "[TABLE]:" then create an HTML table showing ALL {len(trans_names)} translations side-by-side.
 
 Requirements:
 - Use <table class="comparison-table">
 - First column header: "Passage"
-- Other column headers: {', '.join(trans_names)}
+- Column headers for ALL translations: {', '.join(trans_names)}
+- If a translation doesn't have the passage, put "Not found" in that cell
 - Each row shows: verse reference | text from each translation
-- If passage has multiple verses, create one row per verse
 
-Example table structure:
+CRITICAL: You MUST include columns for ALL {len(trans_names)} translations: {', '.join(trans_names)}
+
+YOUR RESPONSE (must have both parts and all {len(trans_names)} translation columns):"""
+        
+        return prompt
+    
+    
+    def _build_topical_comparison_prompt(self, question: str, all_comparisons: List[Dict], 
+                                         translation_ids: List[str], metadata: Dict) -> str:
+        """Build prompt for topical comparison with multiple verses"""
+        
+        trans_names = [metadata[tid].get('name', tid) for tid in translation_ids]
+        
+        # Format the context
+        context_parts = []
+        for verse_comp in all_comparisons:
+            ref = verse_comp['reference']
+            context_parts.append(f"\n=== {ref} ===")
+            for trans_id in translation_ids:
+                trans_name = verse_comp['translations'][trans_id]['name']
+                content = verse_comp['translations'][trans_id]['content']
+                context_parts.append(f"{trans_name}: {content}")
+        
+        combined_context = "\n".join(context_parts)
+        
+        prompt = f"""You are comparing Bible translations for a topical question. You MUST provide your response in this EXACT format:
+
+[SPOKEN]: Brief summary here
+
+[TABLE]: HTML table here
+
+USER'S QUESTION:
+{question}
+
+RELEVANT PASSAGES FROM EACH TRANSLATION:
+{combined_context}
+
+PART 1 - SPOKEN SUMMARY:
+Start with "[SPOKEN]:" then write a 2-3 sentence summary explaining how the translations address this topic.
+
+PART 2 - HTML TABLE:
+Start with "[TABLE]:" then create an HTML table with these specifications:
+- Use <table class="comparison-table">
+- First column header: "Passage"
+- Other column headers: {', '.join(trans_names)}
+- One row per verse reference
+- Show text from each translation (or "Not found")
+
+Example structure:
 [TABLE]:
 <table class="comparison-table">
 <tr>
 <th>Passage</th>
-<th>KJV</th>
-<th>NIV</th>
+<th>{trans_names[0]}</th>
+<th>{trans_names[1]}</th>
+{f'<th>{trans_names[2]}</th>' if len(trans_names) > 2 else ''}
 </tr>
 <tr>
 <td>John 3:16</td>
-<td>For God so loved the world, that he gave his only begotten Son...</td>
-<td>For God so loved the world that he gave his one and only Son...</td>
+<td>For God so loved...</td>
+<td>For God so loved...</td>
+{f'<td>For God so loved...</td>' if len(trans_names) > 2 else ''}
 </tr>
 </table>
 
-CRITICAL: You MUST include both [SPOKEN]: and [TABLE]: markers in your response.
-
-YOUR RESPONSE (must have both parts):"""
+YOUR RESPONSE (must have both [SPOKEN]: and [TABLE]:):"""
         
         return prompt
+    
+    
+    def _parse_comparison_response(self, full_response: str) -> tuple:
+        """Parse AI response into spoken and table parts"""
+        spoken_text = ""
+        table_html = ""
+        
+        if "[SPOKEN]:" in full_response and "[TABLE]:" in full_response:
+            parts = full_response.split("[TABLE]:")
+            spoken_text = parts[0].replace("[SPOKEN]:", "").strip()
+            table_html = parts[1].strip()
+        else:
+            spoken_text = full_response
+            table_html = ""
+        
+        return spoken_text, table_html
 
 
 # Singleton instance
