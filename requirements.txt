@@ -1,34 +1,28 @@
-# ============================================================================
-# Bible Conversations - OPTIMIZED Requirements
-# Removed redundant dependencies, pinned fast-installing versions
-# Build time: ~3-5 minutes (vs 10+ minutes before)
-# ============================================================================
-
-# Core Framework (Fast)
+# Core Framework
 fastapi==0.115.6
 uvicorn[standard]==0.40.0
 python-dotenv==1.2.1
 aiofiles==25.1.0
 
-# LangChain Core (Minimal set - removed redundant packages)
+# LangChain (minimal)
 langchain==0.3.13
 langchain-chroma==0.1.4
 langchain-core==0.3.28
 
-# Vector Database (Pinned fast version)
+# Vector Database
 chromadb==0.5.23
 
-# Embeddings - HuggingFace (Minimal)
+# Embeddings
 sentence-transformers==3.3.1
 
-# Groq (Fast install)
+# Groq
 groq==0.11.0
 
-# Document Processing (Minimal)
+# Document Processing
 pypdf==5.1.0
 python-docx==1.1.2
 
-# TTS (Fast)
+# TTS
 edge-tts==7.2.0
 
 # Security
@@ -39,7 +33,7 @@ pydantic-settings==2.7.0
 httpx==0.28.1
 requests==2.32.3
 
-# Utilities (Essential only)
+# Utilities
 python-dateutil==2.9.0.post0
 pyyaml==6.0.2
 numpy==1.26.4
