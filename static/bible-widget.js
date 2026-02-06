@@ -609,7 +609,7 @@
                         </div>
                         
                         <img id="bible-avatar" class="bible-avatar"
-                             src="${this.apiBase}/static/images/bible-avatar.png" 
+                             src="https://bible-conversations-production.up.railway.app/static/images/bible-comparisons.png" 
                              alt="Bible AI">
                         <div id="bible-status" class="bible-status">
                             Select a translation and click Start

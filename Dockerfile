@@ -1,47 +1,67 @@
 # ============================================================================
-# Bible Conversations - ULTRA-OPTIMIZED for Railway Free Tier
-# Dramatically reduces build time to avoid timeout
+# Bible Conversations - Universal (Railway + AWS Compatible)
 # ============================================================================
 
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --user \
+    --timeout=1000 \
+    --retries=10 \
+    -r requirements.txt
+
+# ============================================================================
+# Final stage
+# ============================================================================
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install only essential system dependencies (minimal set)
+# Copy Python packages from builder
+COPY --from=builder /root/.local /root/.local
+
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
-
-# Copy requirements FIRST (for layer caching)
-COPY requirements.txt .
-
-# Install Python packages with aggressive optimization flags
-# This is MUCH faster than the builder pattern
-RUN pip install --no-cache-dir \
-    --timeout=600 \
-    --retries=5 \
-    --disable-pip-version-check \
-    -r requirements.txt
 
 # Copy application code
 COPY app/ ./app/
 COPY static/ ./static/
 
-# Create directories
-RUN mkdir -p chroma_db uploads static/images
+# Explicitly verify static files exist
+RUN ls -la static/images/
 
-# Environment
+# Add Python packages to PATH
+ENV PATH=/root/.local/bin:$PATH
+
+# Create necessary directories
+RUN mkdir -p chroma_db uploads
+
+# Environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV PORT=8009
 
-# Expose port
-EXPOSE 8009
+# Expose port (Railway ignores this but good for documentation)
+EXPOSE ${PORT:-8080}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:${PORT}/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8080}/health || exit 1
 
-# Start app
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers 1
+# Start application - Uses Railway's PORT or defaults to 8080
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1
