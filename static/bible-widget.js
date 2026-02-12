@@ -9,8 +9,10 @@
     console.log('=== Bible Study Widget Loading ===');
     
     const BibleWidget = {
-        // Configuration
-        apiBase: 'http://127.0.0.1:8009',
+    // Configuration - use same host as current page
+    apiBase: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? `http://${window.location.hostname}:${window.location.port || 8009}`
+        : 'https://bible-conversations-production.up.railway.app',
         
         // State
         isOpen: false,
@@ -114,18 +116,23 @@
         async switchTranslation(translationId = null, token = null) {
             const useToken = token || this.sessionToken;
             
+            console.log('=== SWITCH TRANSLATION DEBUG ===');
+            console.log('Token:', useToken);
+            console.log('Translation ID:', translationId);
+            console.log('API Base:', this.apiBase);
+
+
             if (!useToken) {
                 console.error('No session token available');
-                return;
+                return false;
             }
             
-            // Get translation ID from selector if not provided
             if (!translationId) {
                 const select = document.getElementById('translation-select');
-                translationId = select.value;
+                translationId = select?.value;
             }
             
-            if (!translationId) return;
+            if (!translationId) return false;
             
             try {
                 console.log('Switching to translation:', translationId);
@@ -140,6 +147,7 @@
                 });
                 
                 const data = await resp.json();
+                console.log('Switch response:', data);
                 
                 if (data.success) {
                     this.currentTranslation = {
@@ -147,17 +155,14 @@
                         name: data.translation_name
                     };
                     console.log('✓ Switched to:', data.translation_name);
-                    
-                    // Update selector if widget is open
-                    const select = document.getElementById('translation-select');
-                    if (select) {
-                        select.value = translationId;
-                    }
+                    return true;
                 } else {
-                    console.error('Switch failed:', data.message);
+                    console.error('Switch failed:', data.message || data.detail);
+                    return false;
                 }
             } catch (error) {
                 console.error('Failed to switch translation:', error);
+                return false;
             }
         },
         
@@ -1004,7 +1009,7 @@
                         body: JSON.stringify({
                             question: userText,
                             translation_ids: this.selectedTranslationsForCompare,
-                            k: 1,  // CHANGE FROM 3 TO 1 for single verse comparisons
+                            k: 3,  // CHANGE FROM 3 TO 1 for single verse comparisons
                             include_chunks: false
                         })
                     });

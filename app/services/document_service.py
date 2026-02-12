@@ -1,10 +1,12 @@
 """
 Document Processing Service (Translation-Aware)
 Handles document upload, parsing, and storage in specific translation collections
+FIXED: Restored Bible text parsing with proper metadata
 """
 
 import os
 import tempfile
+import asyncio
 from pathlib import Path
 from typing import Dict
 from fastapi import UploadFile
@@ -17,6 +19,7 @@ from langchain_community.document_loaders import (
 )
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.documents import Document
 
 from app.core.config import get_settings
 
@@ -37,7 +40,7 @@ class DocumentService:
             encode_kwargs={'normalize_embeddings': True}
         )
         
-        # Text splitter for chunking
+        # Text splitter for chunking (fallback for non-Bible documents)
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200,
@@ -48,6 +51,9 @@ class DocumentService:
         self.chroma_base_path = Path(settings.CHROMA_DB_PATH)
         self.upload_dir = Path(settings.UPLOAD_DIR)
         self.upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Track processing status (simple in-memory store)
+        self.processing_status = {}
         
         print("✓ Document Service initialized")
     
@@ -81,19 +87,223 @@ class DocumentService:
             raise ValueError(f"Unsupported file type: {ext}. Supported: PDF, TXT, MD, DOCX")
     
     
+    def _parse_bible_text(self, documents, filename: str, translation_id: str):
+        """
+        Parse Bible text and create chunks with proper metadata
+        Handles multiple formats:
+        - KJV/ASV: "Genesis 1:1\tIn the beginning..."
+        - ESV: Chapter headers + verse numbers only
+        """
+        import re
+        
+        chunks = []
+        current_book = None
+        current_chapter = None
+        
+        for doc in documents:
+            lines = doc.page_content.split('\n')
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Check for book header (all caps): "GENESIS", "EXODUS", etc.
+                if line.isupper() and len(line.split()) <= 3 and len(line) > 2:
+                    # Potential book name
+                    potential_book = line.title()  # Convert "GENESIS" to "Genesis"
+                    # Verify it's a reasonable book name (alphabetic, possibly with numbers)
+                    if re.match(r'^[A-Za-z0-9\s]+$', potential_book):
+                        current_book = potential_book
+                        print(f"Found book: {current_book}")
+                        continue
+                
+                # Check for chapter header: "Chapter 1", "Chapter 23", etc.
+                chapter_match = re.match(r'^Chapter\s+(\d+)$', line, re.IGNORECASE)
+                if chapter_match:
+                    current_chapter = int(chapter_match.group(1))
+                    print(f"Found chapter: {current_book} {current_chapter}")
+                    continue
+                
+                # Format 1: KJV/ASV with tab: "Genesis 1:1\tText"
+                verse_pattern_tab = r'^([A-Za-z0-9\s]+?)\s+(\d+):(\d+)\t(.+)$'
+                match = re.match(verse_pattern_tab, line)
+                
+                if match:
+                    book = match.group(1).strip()
+                    chapter = int(match.group(2))
+                    verse = int(match.group(3))
+                    text = match.group(4).strip()
+                    
+                    current_book = book
+                    current_chapter = chapter
+                else:
+                    # Format 2: KJV/ASV with space: "Genesis 1:1 Text"
+                    verse_pattern_space = r'^([A-Za-z0-9\s]+?)\s+(\d+):(\d+)\s+(.+)$'
+                    match = re.match(verse_pattern_space, line)
+                    
+                    if match:
+                        book = match.group(1).strip()
+                        chapter = int(match.group(2))
+                        verse = int(match.group(3))
+                        text = match.group(4).strip()
+                        
+                        current_book = book
+                        current_chapter = chapter
+                    else:
+                        # Format 3: ESV style - just verse number: "1 Text" or "2Text"
+                        # Need current_book and current_chapter from headers
+                        if current_book and current_chapter:
+                            # Try single verse number: "2Text" or "2 Text"
+                            esv_pattern = r'^(\d+)\s+(.+)$'
+                            match = re.match(esv_pattern, line)
+                            
+                            if match:
+                                verse = int(match.group(1))
+                                text = match.group(2).strip()
+                                book = current_book
+                                chapter = current_chapter
+                            else:
+                                # Not a verse, skip
+                                continue
+                        else:
+                            # No context, skip this line
+                            continue
+                
+                if match and book and chapter:
+                    # Create chunk with full metadata
+                    chunk = Document(
+                        page_content=f"{book} {chapter}:{verse} - {text}",
+                        metadata={
+                            'source': filename,
+                            'translation_id': translation_id,
+                            'book': book,
+                            'chapter': chapter,
+                            'verse_start': verse,
+                            'verse_end': verse
+                        }
+                    )
+                    chunks.append(chunk)
+        
+        print(f"✓ Parsed {len(chunks)} verses from Bible text")
+        return chunks
+    
+    
+    async def _process_in_background(self, temp_path: str, filename: str, 
+                                 translation_id: str, job_id: str):
+        """Process document in background to avoid timeout"""
+        try:
+            self.processing_status[job_id] = {
+                'status': 'loading',
+                'progress': 0,
+                'message': 'Loading document...'
+            }
+            
+            # Load document
+            loader = self._get_loader_for_file(temp_path)
+            documents = loader.load()
+            
+            self.processing_status[job_id] = {
+                'status': 'parsing',
+                'progress': 20,
+                'message': f'Loaded {len(documents)} document(s), parsing Bible structure...'
+            }
+            
+            # CRITICAL: Parse Bible verses and create structured chunks
+            chunks = self._parse_bible_text(documents, filename, translation_id)
+            
+            if not chunks:
+                raise ValueError("Document parsing produced no chunks")
+            
+            self.processing_status[job_id] = {
+                'status': 'embedding',
+                'progress': 40,
+                'message': f'Parsed {len(chunks)} verses, creating embeddings...'
+            }
+            
+            # Store in translation-specific ChromaDB collection
+            translation_path = self.chroma_base_path / translation_id
+            translation_path.mkdir(parents=True, exist_ok=True)
+            
+            vectorstore = Chroma(
+                persist_directory=str(translation_path),
+                embedding_function=self.embeddings                
+            )
+            
+            # OPTIMIZATION: Larger batch size to reduce processing time
+            batch_size = 500
+            total_batches = (len(chunks) - 1) // batch_size + 1
+            
+            for i in range(0, len(chunks), batch_size):
+                batch = chunks[i:i + batch_size]
+                batch_num = i // batch_size + 1
+                
+                # Add documents
+                await asyncio.get_event_loop().run_in_executor(
+                    None, 
+                    vectorstore.add_documents, 
+                    batch
+                )
+                
+                # Update progress
+                progress = 40 + int((batch_num / total_batches) * 50)
+                self.processing_status[job_id] = {
+                    'status': 'embedding',
+                    'progress': progress,
+                    'message': f'Processing batch {batch_num}/{total_batches}...'
+                }
+                
+                print(f"Added batch {batch_num}/{total_batches}")
+            
+            # Get total chunks
+            collection = vectorstore._collection
+            total_chunks = collection.count()
+            
+            # Success!
+            self.processing_status[job_id] = {
+                'status': 'complete',
+                'progress': 100,
+                'message': f'Successfully indexed {len(chunks)} verses',
+                'num_chunks': len(chunks),
+                'total_chunks': total_chunks
+            }
+            
+            print(f"✓ Processed {filename}: {len(chunks)} verses indexed in {translation_id}")
+            
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"Error processing document: {str(e)}")
+            print(f"Full traceback:\n{error_details}")
+            
+            self.processing_status[job_id] = {
+                'status': 'error',
+                'progress': 0,
+                'message': f'Failed: {str(e)}',
+                'error': str(e)
+            }
+        
+        finally:
+            # Clean up temporary file
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+    
+    
     async def process_document(self, file: UploadFile, translation_id: str) -> Dict:
         """
-        Process and store a document in a specific translation collection
+        Process and store a Bible document in a specific translation collection
+        Returns immediately with job_id for status tracking
         
         Args:
-            file: Uploaded file
+            file: Uploaded Bible text file
             translation_id: ID of the translation to store in
         
         Returns:
-            Dictionary with success status and statistics
+            Dictionary with job_id for tracking progress
         """
-        temp_path = None
-        
         try:
             print(f"Processing file: {file.filename} for translation: {translation_id}")
             
@@ -106,66 +316,27 @@ class DocumentService:
             
             print(f"Saved to temp path: {temp_path}")
             
-            # Load document
-            loader = self._get_loader_for_file(temp_path)
-            print(f"Using loader: {type(loader).__name__}")
+            # Generate job ID
+            import uuid
+            job_id = str(uuid.uuid4())
             
-            documents = loader.load()
-            print(f"Loaded {len(documents)} document(s)")
-            
-            if not documents:
-                raise ValueError("No content could be extracted from the file")
-            
-            # Split into chunks
-            chunks = self.text_splitter.split_documents(documents)
-            print(f"Split into {len(chunks)} chunks")
-            
-            if not chunks:
-                raise ValueError("Document splitting produced no chunks")
-            
-            # Add metadata
-            for chunk in chunks:
-                chunk.metadata['source'] = file.filename
-                chunk.metadata['translation_id'] = translation_id
-            
-            # Store in translation-specific ChromaDB collection
-            translation_path = self.chroma_base_path / translation_id
-            translation_path.mkdir(parents=True, exist_ok=True)
-            
-            print(f"Storing in: {translation_path}")
-            
-            vectorstore = Chroma(
-                persist_directory=str(translation_path),
-                embedding_function=self.embeddings
+            # Start background processing
+            asyncio.create_task(
+                self._process_in_background(temp_path, file.filename, translation_id, job_id)
             )
-            
-            # Add documents in batches to avoid memory issues
-            batch_size = 100
-            for i in range(0, len(chunks), batch_size):
-                batch = chunks[i:i + batch_size]
-                vectorstore.add_documents(batch)
-                print(f"Added batch {i//batch_size + 1}/{(len(chunks)-1)//batch_size + 1}")
-            
-            # Get total chunks in this translation
-            collection = vectorstore._collection
-            total_chunks = collection.count()
-            
-            print(f"✓ Processed {file.filename}: {len(chunks)} chunks added to {translation_id}")
-            print(f"Total chunks in {translation_id}: {total_chunks}")
             
             return {
                 'success': True,
+                'job_id': job_id,
                 'filename': file.filename,
                 'translation_id': translation_id,
-                'num_chunks': len(chunks),
-                'total_chunks': total_chunks,
-                'message': f'Successfully added {len(chunks)} chunks to {translation_id}'
+                'message': 'Upload started. Use job_id to check progress.'
             }
             
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
-            print(f"Error processing document: {str(e)}")
+            print(f"Error starting upload: {str(e)}")
             print(f"Full traceback:\n{error_details}")
             
             return {
@@ -173,16 +344,19 @@ class DocumentService:
                 'filename': file.filename,
                 'translation_id': translation_id,
                 'error': str(e),
-                'message': f'Failed to process document: {str(e)}'
+                'message': f'Failed to start upload: {str(e)}'
             }
-            
-        finally:
-            # Clean up temporary file
-            if temp_path and os.path.exists(temp_path):
-                try:
-                    os.unlink(temp_path)
-                except:
-                    pass
+    
+    
+    def get_processing_status(self, job_id: str) -> Dict:
+        """Get the status of a background processing job"""
+        if job_id not in self.processing_status:
+            return {
+                'status': 'not_found',
+                'message': 'Job ID not found'
+            }
+        
+        return self.processing_status[job_id]
 
 
 # Singleton instance

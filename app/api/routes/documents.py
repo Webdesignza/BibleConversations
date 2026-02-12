@@ -1,5 +1,6 @@
 """
 API Routes for Document Management (Translation-Specific)
+UPDATED: Support for background processing with status tracking
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -19,13 +20,14 @@ async def upload_document_to_translation(
 ):
     """
     Upload a document to a specific Bible translation
+    Returns immediately with job_id for tracking progress
     
     Args:
         translation_id: ID of the translation to upload to
         file: Document file (PDF, TXT, MD, DOCX)
     
     Returns:
-        Success status and number of chunks created
+        Success status with job_id for progress tracking
     """
     try:
         # Verify translation exists
@@ -38,16 +40,9 @@ async def upload_document_to_translation(
                 detail=f"Translation '{translation_id}' not found"
             )
         
-        # Process document for this specific translation
+        # Start background processing
         doc_service = get_document_service()
         result = await doc_service.process_document(file, translation_id)
-        
-        if result['success']:
-            # Update chunk count in metadata
-            rag_service.update_translation_chunk_count(
-                translation_id,
-                result['total_chunks']
-            )
         
         return result
         
@@ -58,6 +53,61 @@ async def upload_document_to_translation(
         raise HTTPException(
             status_code=500,
             detail=f"Upload failed: {str(e)}"
+        )
+
+
+@router.get("/upload-status/{job_id}")
+async def get_upload_status(
+    job_id: str,
+    api_key: str = Depends(verify_api_key)
+):
+    """
+    Check the status of a background upload job
+    
+    Args:
+        job_id: Job ID returned from upload endpoint
+    
+    Returns:
+        Current status, progress percentage, and message
+    """
+    try:
+        doc_service = get_document_service()
+        status = doc_service.get_processing_status(job_id)
+        
+        # If complete, update translation metadata
+        if status.get('status') == 'complete':
+            rag_service = get_rag_service()
+            
+            # Extract translation_id from job context if available
+            # For now, we'll update all translations (safe but not ideal)
+            # TODO: Store translation_id with job for precise updates
+            translations = rag_service.get_available_translations()
+            for trans in translations:
+                # Refresh chunk count from ChromaDB
+                try:
+                    from langchain_chroma import Chroma
+                    from pathlib import Path
+                    trans_path = Path(rag_service.chroma_base_path) / trans['id']
+                    if trans_path.exists():
+                        vs = Chroma(
+                            persist_directory=str(trans_path),
+                            embedding_function=rag_service.embeddings
+                        )
+                        count = vs._collection.count()
+                        rag_service.update_translation_chunk_count(trans['id'], count)
+                except:
+                    pass
+        
+        return {
+            'success': True,
+            **status
+        }
+        
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get status: {str(e)}"
         )
 
 

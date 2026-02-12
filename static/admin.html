@@ -238,6 +238,26 @@
             margin-bottom: 20px;
         }
 
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e5e7eb;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #1E3A8A 0%, #D97706 100%);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
         .status-box {
             background: #f0f9ff;
             border-left: 4px solid #1E3A8A;
@@ -428,12 +448,12 @@
         const API_BASE = window.location.origin;
         let currentTranslationToDelete = null;
         let currentTranslationToUpload = null;
+        let uploadPollingInterval = null;
 
         function getApiKey() {
             return document.getElementById('apiKey').value;
         }
 
-        // Load translations on page load
         window.addEventListener('load', loadTranslations);
 
         async function loadTranslations() {
@@ -530,7 +550,7 @@
                     document.getElementById('newTransDesc').value = '';
                     setTimeout(loadTranslations, 1000);
                 } else {
-                    showStatus(data.message, 'error');
+                    showStatus(data.message || data.detail || 'Unknown error', 'error');
                 }
 
             } catch (error) {
@@ -543,7 +563,6 @@
             document.getElementById('uploadTransName').textContent = translationName;
             document.getElementById('uploadModal').classList.add('active');
             
-            // Setup drag and drop
             const uploadArea = document.getElementById('uploadArea');
             uploadArea.addEventListener('dragover', handleDragOver);
             uploadArea.addEventListener('dragleave', handleDragLeave);
@@ -554,6 +573,10 @@
             document.getElementById('uploadModal').classList.remove('active');
             currentTranslationToUpload = null;
             document.getElementById('uploadStatus').innerHTML = '';
+            if (uploadPollingInterval) {
+                clearInterval(uploadPollingInterval);
+                uploadPollingInterval = null;
+            }
         }
 
         function handleDragOver(e) {
@@ -584,7 +607,7 @@
             }
 
             const uploadStatus = document.getElementById('uploadStatus');
-            uploadStatus.innerHTML = '<h4>Uploading files...</h4>';
+            uploadStatus.innerHTML = '<h4>Starting upload...</h4>';
 
             for (let file of files) {
                 try {
@@ -601,21 +624,63 @@
 
                     const result = await response.json();
 
-                    if (result.success) {
-                        uploadStatus.innerHTML += `<p style="color: #10b981;">✅ ${file.name}: ${result.num_chunks} chunks added</p>`;
+                    if (result.success && result.job_id) {
+                        uploadStatus.innerHTML += `
+                            <div id="progress-${result.job_id}">
+                                <p>📤 Processing ${file.name}...</p>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 0%">0%</div>
+                                </div>
+                                <p id="status-${result.job_id}">Initializing...</p>
+                            </div>
+                        `;
+                        
+                        pollUploadStatus(result.job_id, apiKey);
                     } else {
-                        uploadStatus.innerHTML += `<p style="color: #dc2626;">❌ ${file.name}: Failed</p>`;
+                        uploadStatus.innerHTML += `<p style="color: #dc2626;">❌ ${file.name}: Failed to start upload</p>`;
                     }
 
                 } catch (error) {
                     uploadStatus.innerHTML += `<p style="color: #dc2626;">❌ ${file.name}: ${error.message}</p>`;
                 }
             }
+        }
 
-            uploadStatus.innerHTML += '<p style="margin-top: 20px;"><strong>Upload complete!</strong></p>';
-            setTimeout(() => {
-                loadTranslations();
-            }, 2000);
+        async function pollUploadStatus(jobId, apiKey) {
+            const checkStatus = async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/api/documents/upload-status/${jobId}`, {
+                        headers: { 'Authorization': `Bearer ${apiKey}` }
+                    });
+
+                    const status = await response.json();
+
+                    const progressFill = document.querySelector(`#progress-${jobId} .progress-fill`);
+                    const statusText = document.getElementById(`status-${jobId}`);
+
+                    if (progressFill && statusText) {
+                        progressFill.style.width = `${status.progress || 0}%`;
+                        progressFill.textContent = `${status.progress || 0}%`;
+                        statusText.textContent = status.message || 'Processing...';
+                    }
+
+                    if (status.status === 'complete') {
+                        if (progressFill) progressFill.style.width = '100%';
+                        if (statusText) statusText.innerHTML = `<span style="color: #10b981;">✅ Complete! Added ${status.num_chunks} chunks</span>`;
+                        clearInterval(uploadPollingInterval);
+                        setTimeout(loadTranslations, 2000);
+                    } else if (status.status === 'error') {
+                        if (statusText) statusText.innerHTML = `<span style="color: #dc2626;">❌ Error: ${status.message}</span>`;
+                        clearInterval(uploadPollingInterval);
+                    }
+
+                } catch (error) {
+                    console.error('Status check failed:', error);
+                }
+            };
+
+            uploadPollingInterval = setInterval(checkStatus, 1000);
+            checkStatus();
         }
 
         function openDeleteModal(translationId, translationName) {
@@ -664,7 +729,6 @@
             }, 5000);
         }
 
-        // Auto-load translations when API key is entered
         document.getElementById('apiKey').addEventListener('input', () => {
             const apiKey = getApiKey();
             if (apiKey.length > 10) {
