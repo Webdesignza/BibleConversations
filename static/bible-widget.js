@@ -1009,7 +1009,7 @@
                         body: JSON.stringify({
                             question: userText,
                             translation_ids: this.selectedTranslationsForCompare,
-                            k: 3,  // CHANGE FROM 3 TO 1 for single verse comparisons
+                            k: 1,  // CHANGE FROM 3 TO 1 for single verse comparisons
                             include_chunks: false
                         })
                     });
@@ -1061,8 +1061,9 @@
                         },
                         body: JSON.stringify({
                             question: userText,
-                            k: 3,
-                            include_sources: false
+                            translation_ids: this.selectedTranslationsForCompare,
+                            k: 1,  // CHANGED: from 3 to 1
+                            include_chunks: false
                         })
                     });
                     
