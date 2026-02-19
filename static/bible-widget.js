@@ -899,25 +899,44 @@
             }
             
             const volume = this.detectVoiceActivity();
-            const SILENCE_THRESHOLD = 0.08;      // CHANGED: from 0.05 to 0.08 (less sensitive)
-            const SILENCE_DURATION = 2000;        // CHANGED: from 1500 to 2000 (wait longer)
-            const MIN_RECORDING_TIME = 1200;      // CHANGED: from 800 to 1200 (record longer before checking)
+            
+            // More lenient thresholds - focus on detecting actual pauses in speech
+            const VOICE_THRESHOLD = 0.03; // Voice is present above this
+            const SILENCE_THRESHOLD = 0.012; // Silence is below this
+            const SILENCE_DURATION = 1200; // 1.2 seconds of silence to stop
+            const MIN_RECORDING_TIME = 1000; // Minimum 1 second
+            const MAX_RECORDING_TIME = 8000; // Maximum 8 seconds (force stop)
+            
             const elapsedTime = Date.now() - this.recordingStartTime;
             
-            if (volume > SILENCE_THRESHOLD) {
+            // Force stop if recording too long
+            if (elapsedTime > MAX_RECORDING_TIME) {
+                console.log('Max recording time reached, forcing stop');
+                this.mediaRecorder.stop();
+                return;
+            }
+            
+            if (volume > VOICE_THRESHOLD) {
+                // Clear voice detected - reset silence timer
                 this.silenceStart = null;
-            } else {
+                console.log('Voice detected, volume:', volume.toFixed(3));
+            } else if (volume < SILENCE_THRESHOLD) {
+                // Clear silence detected
                 if (!this.silenceStart && elapsedTime > MIN_RECORDING_TIME) {
                     this.silenceStart = Date.now();
+                    console.log('Silence started');
                 } else if (this.silenceStart) {
                     const silenceDuration = Date.now() - this.silenceStart;
                     if (silenceDuration > SILENCE_DURATION) {
+                        console.log('Silence threshold reached, stopping');
                         this.mediaRecorder.stop();
                         return;
                     }
                 }
             }
+            // else: volume is in the ambiguous middle range (0.012-0.03), don't change state
             
+            // Continue monitoring
             requestAnimationFrame(() => this.monitorSilence());
         },
 
