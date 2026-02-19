@@ -897,9 +897,9 @@
             }
             
             const volume = this.detectVoiceActivity();
-            const SILENCE_THRESHOLD = 0.05;
-            const SILENCE_DURATION = 1500;
-            const MIN_RECORDING_TIME = 800;
+            const SILENCE_THRESHOLD = 0.08;      // CHANGED: from 0.05 to 0.08 (less sensitive)
+            const SILENCE_DURATION = 2000;        // CHANGED: from 1500 to 2000 (wait longer)
+            const MIN_RECORDING_TIME = 1200;      // CHANGED: from 800 to 1200 (record longer before checking)
             const elapsedTime = Date.now() - this.recordingStartTime;
             
             if (volume > SILENCE_THRESHOLD) {
