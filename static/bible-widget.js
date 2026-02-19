@@ -197,7 +197,7 @@
                     top: 0;
                     left: 0;
                     width: 100%;
-                    height: 100%;
+                    height: 100vh;
                     background: rgba(0, 0, 0, 0.7);
                     z-index: 9999;
                     backdrop-filter: blur(5px);
@@ -262,6 +262,8 @@
                 .bible-content {
                     padding: 30px;
                     text-align: center;
+                    flex: 1;                   /* ADD THIS - takes remaining space */
+                    overflow-y: auto;          /* ADD THIS - makes content scrollable */
                 }
                 
                 .translation-selector {
@@ -409,7 +411,7 @@
                 
                 .bible-transcript {
                     margin-top: 15px;
-                    max-height: 200px;
+                    max-height: 400px;
                     overflow-y: auto;
                     text-align: left;
                 }
