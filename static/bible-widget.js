@@ -12,7 +12,7 @@
     // Configuration - use same host as current page
     apiBase: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
         ? `http://${window.location.hostname}:${window.location.port || 8009}`
-        : 'https://bible-conversations-production.up.railway.app',
+        : 'https://bibleconversations-production.up.railway.app',
         
         // State
         isOpen: false,
