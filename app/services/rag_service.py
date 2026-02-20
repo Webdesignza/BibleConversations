@@ -86,16 +86,18 @@ class RAGService:
     
     
     def get_available_translations(self) -> List[Dict]:
-        """Get list of available Bible translations with validation"""
+        """Get list of available Bible translations"""
         try:
             metadata = self._load_translations_metadata()
             
-            # Validate each translation actually has data
-            validated_translations = []
+            translations = []
             for trans_id, info in metadata.items():
                 translation_path = self.chroma_base_path / trans_id
                 
-                # Check if ChromaDB actually exists and has data
+                # Check if ChromaDB has actual data
+                actual_chunks = 0
+                has_data = False
+                
                 if translation_path.exists():
                     try:
                         from chromadb import PersistentClient
@@ -103,28 +105,27 @@ class RAGService:
                         collections = client.list_collections()
                         
                         if collections and len(collections) > 0:
-                            collection = collections[0]
-                            actual_count = collection.count()
-                            
-                            if actual_count > 0:
-                                # Update chunk count with actual count
-                                info['chunks'] = actual_count
-                                validated_translations.append({
-                                    'id': trans_id,
-                                    **info
-                                })
+                            actual_chunks = collections[0].count()
+                            has_data = actual_chunks > 0
                     except Exception as e:
-                        print(f"⚠️ Translation {trans_id} metadata exists but ChromaDB is empty or invalid: {e}")
-                        continue
-                else:
-                    print(f"⚠️ Translation {trans_id} in metadata but folder doesn't exist")
+                        print(f"⚠️ Error checking {trans_id}: {e}")
+                
+                # Include translation regardless of data status
+                translations.append({
+                    'id': trans_id,
+                    'name': info.get('name', trans_id),
+                    'description': info.get('description', ''),
+                    'chunks': actual_chunks,  # Show 0 if no data
+                    'has_data': has_data,     # Flag for UI
+                    'created': info.get('created', '')
+                })
             
-            return validated_translations
+            return translations
             
         except Exception as e:
             print(f"Error loading translations: {e}")
             return []
-    
+        
     
     def create_translation(self, translation_id: str, name: str, description: str = "") -> Dict:
         """Create a new translation collection"""
