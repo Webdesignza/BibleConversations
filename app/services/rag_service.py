@@ -58,8 +58,18 @@ class RAGService:
     
     def _load_translations_metadata(self) -> Dict:
         """Load translations metadata from JSON file"""
+        metadata_file = self.chroma_base_path / "translations.json"
+        
+        # Create empty metadata file if it doesn't exist
+        if not metadata_file.exists():
+            print("⚠️ translations.json not found, creating empty metadata")
+            self.chroma_base_path.mkdir(parents=True, exist_ok=True)
+            with open(metadata_file, 'w') as f:
+                json.dump({}, f)
+            return {}
+        
         try:
-            with open(self.translations_file, 'r') as f:
+            with open(metadata_file, 'r') as f:
                 return json.load(f)
         except Exception as e:
             print(f"Error loading translations metadata: {e}")
@@ -76,29 +86,44 @@ class RAGService:
     
     
     def get_available_translations(self) -> List[Dict]:
-        """Get list of all available translations"""
+        """Get list of available Bible translations with validation"""
         try:
-            print("📋 Getting available translations...")
             metadata = self._load_translations_metadata()
-            print(f"✓ Loaded metadata: {metadata}")
             
-            translations = []
-            for translation_id, info in metadata.items():
-                translations.append({
-                    'id': translation_id,
-                    'name': info.get('name', translation_id),
-                    'description': info.get('description', ''),
-                    'created': info.get('created', ''),
-                    'chunks': info.get('chunks', 0)
-                })
+            # Validate each translation actually has data
+            validated_translations = []
+            for trans_id, info in metadata.items():
+                translation_path = self.chroma_base_path / trans_id
+                
+                # Check if ChromaDB actually exists and has data
+                if translation_path.exists():
+                    try:
+                        from chromadb import PersistentClient
+                        client = PersistentClient(path=str(translation_path))
+                        collections = client.list_collections()
+                        
+                        if collections and len(collections) > 0:
+                            collection = collections[0]
+                            actual_count = collection.count()
+                            
+                            if actual_count > 0:
+                                # Update chunk count with actual count
+                                info['chunks'] = actual_count
+                                validated_translations.append({
+                                    'id': trans_id,
+                                    **info
+                                })
+                    except Exception as e:
+                        print(f"⚠️ Translation {trans_id} metadata exists but ChromaDB is empty or invalid: {e}")
+                        continue
+                else:
+                    print(f"⚠️ Translation {trans_id} in metadata but folder doesn't exist")
             
-            print(f"✓ Returning {len(translations)} translations")
-            return sorted(translations, key=lambda x: x['name'])
+            return validated_translations
+            
         except Exception as e:
-            import traceback
-            print(f"❌ Error in get_available_translations: {e}")
-            print(f"Traceback:\n{traceback.format_exc()}")
-            raise
+            print(f"Error loading translations: {e}")
+            return []
     
     
     def create_translation(self, translation_id: str, name: str, description: str = "") -> Dict:
