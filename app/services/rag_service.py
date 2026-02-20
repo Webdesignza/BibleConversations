@@ -70,7 +70,28 @@ class RAGService:
         
         try:
             with open(metadata_file, 'r') as f:
-                return json.load(f)
+                content = f.read().strip()
+                
+                # Handle empty file
+                if not content:
+                    print("⚠️ translations.json is empty, initializing")
+                    with open(metadata_file, 'w') as fw:
+                        json.dump({}, fw)
+                    return {}
+                
+                return json.loads(content)
+                
+        except json.JSONDecodeError as e:
+            print(f"⚠️ Invalid JSON in translations.json: {e}")
+            print(f"Content: {content[:100]}")  # Show first 100 chars
+            # Backup corrupted file and create new one
+            backup_file = self.chroma_base_path / "translations.json.backup"
+            with open(backup_file, 'w') as f:
+                f.write(content)
+            with open(metadata_file, 'w') as f:
+                json.dump({}, f)
+            return {}
+            
         except Exception as e:
             print(f"Error loading translations metadata: {e}")
             return {}
