@@ -55,7 +55,7 @@ class RAGService:
         
         print(f"✓ Translation system initialized: {self.chroma_base_path}")
     
-    
+    # Will check if JSON file exists and load it, otherwise create an empty one
     def _load_translations_metadata(self) -> Dict:
         """Load translations metadata from JSON file"""
         metadata_file = self.chroma_base_path / "translations.json"
