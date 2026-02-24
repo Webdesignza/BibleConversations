@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     
     # Model Configuration
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"  # FREE HuggingFace
-    CHAT_MODEL: str = "llama-3.1-70b-versatile"  # FREE Groq
+    CHAT_MODEL: str = "llama-3.1-8b-instant"  # FREE Groq
     
     # Groq API
     GROQ_API_BASE: str = "https://api.groq.com/openai/v1"
