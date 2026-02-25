@@ -16,7 +16,7 @@ class SpeechService:
     async def text_to_speech(
         self, 
         text: str, 
-        voice: str = "en-US-JennyNeural",
+        voice: str = "en-GB-RyanNeural",
         rate: str = "+0%",
         pitch: str = "+0Hz"
     ) -> bytes:
