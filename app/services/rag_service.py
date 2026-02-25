@@ -521,6 +521,45 @@ class RAGService:
             return []
     
     
+    def _books_match(self, doc_book: str, target_book: str) -> bool:
+        """
+        Robust book name matching that handles variations across translations.
+        E.g. 'john' matches 'john', 'gospel of john', but NOT '1 john' or '2 john'
+        """
+        doc_book = doc_book.lower().strip()
+        target_book = target_book.lower().strip()
+
+        # Direct match
+        if doc_book == target_book:
+            return True
+
+        # Target is a numbered book (e.g. "1 john") — require exact or very close match only
+        if target_book[0].isdigit():
+            return doc_book == target_book or doc_book.startswith(target_book)
+
+        # Target is NOT numbered (e.g. "john") — make sure doc_book is also not numbered
+        # This prevents "john" matching "1 john", "2 john", "3 john"
+        if doc_book and doc_book[0].isdigit():
+            return False
+
+        # Allow "gospel of john" -> matches "john"
+        # Strip common prefixes
+        prefixes = ['gospel of ', 'the gospel of ', 'the book of ', 'book of ']
+        clean_doc = doc_book
+        for prefix in prefixes:
+            if clean_doc.startswith(prefix):
+                clean_doc = clean_doc[len(prefix):]
+                break
+
+        clean_target = target_book
+        for prefix in prefixes:
+            if clean_target.startswith(prefix):
+                clean_target = clean_target[len(prefix):]
+                break
+
+        return clean_doc == clean_target or clean_doc.startswith(clean_target)
+
+
     def _retrieve_relevant_chunks(self, query: str, k: int = None) -> List[Dict]:
         """
         Retrieve relevant chunks using semantic search + smart filtering
@@ -528,92 +567,81 @@ class RAGService:
         """
         if not self.vectorstore:
             return []
-        
+
         if k is None:
             k = settings.RETRIEVAL_K
-        
+
         print(f"🔍 Searching for: '{query}' (k={k})")
-        
+
         # Extract verse reference if present
         verse_ref = self._extract_verse_reference(query)
-        
+
         # Get MORE results than needed for filtering
-        search_k = k * 5 if verse_ref else k
+        search_k = k * 10 if verse_ref else k  # Increased from k*5 to k*10
         results = self.vectorstore.similarity_search_with_score(query, k=search_k)
-        
+
         retrieved_chunks = []
-        
+
         if verse_ref:
-            # SMART FILTERING: Prioritize exact matches, but keep semantic results as fallback
-            print(f"  📍 Looking for: {verse_ref['book']} chapter {verse_ref['chapter']}")
-            
+            print(f"  📍 Looking for: {verse_ref['book']} {verse_ref['chapter']}:{verse_ref['verse_start']}-{verse_ref['verse_end']}")
+
             exact_matches = []
             close_matches = []
-            
+
             for doc, score in results:
                 meta = doc.metadata
                 doc_book = meta.get('book', '').lower()
                 doc_chapter = meta.get('chapter', -1)
                 doc_verse = meta.get('verse_start', -1)
-                
+
                 target_book = verse_ref['book'].lower()
-                
-                # DEBUG: Show what we're comparing
-                print(f"    🔎 Checking: '{doc_book}' vs target '{target_book}' | Ch:{doc_chapter} vs {verse_ref['chapter']} | V:{doc_verse}")
-                
-                # Check if this is an exact book + chapter match
-                # Simple rule: target_book appears in doc_book AND doc_book doesn't start with a digit
-                book_words = doc_book.split()
-                starts_with_digit = False
-                if book_words and len(book_words[0]) > 0:
-                    starts_with_digit = book_words[0][0].isdigit()
-                
-                is_gospel = (target_book in doc_book) and not starts_with_digit
-                is_correct_chapter = (doc_chapter == verse_ref['chapter'])
-                is_correct_verse = (verse_ref['verse_start'] <= doc_verse <= verse_ref['verse_end'])
-                
-                print(f"      Gospel:{is_gospel} | Chapter:{is_correct_chapter} | Verse:{is_correct_verse}")
-                
-                if is_gospel and is_correct_chapter and is_correct_verse:
+
+                # Use robust book matching
+                book_matches = self._books_match(doc_book, target_book)
+                chapter_matches = (doc_chapter == verse_ref['chapter'])
+                verse_matches = (verse_ref['verse_start'] <= doc_verse <= verse_ref['verse_end'])
+
+                print(f"    🔎 {meta.get('book')} {doc_chapter}:{doc_verse} | book:{book_matches} ch:{chapter_matches} v:{verse_matches}")
+
+                if book_matches and chapter_matches and verse_matches:
                     exact_matches.append((doc, score))
                     print(f"      ✓ EXACT MATCH!")
-                elif is_gospel and is_correct_chapter:
+                elif book_matches and chapter_matches:
                     close_matches.append((doc, score))
-                    print(f"      ~ CLOSE MATCH (wrong verse)")
-            
-            # Use exact matches if found, otherwise fall back to semantic results
+                    print(f"      ~ CLOSE MATCH (right book+chapter, wrong verse)")
+
+            # Use exact matches if found, otherwise close matches, otherwise semantic
             if exact_matches:
                 print(f"  ✅ Using {len(exact_matches)} exact matches")
                 results_to_use = exact_matches[:k]
             elif close_matches:
-                print(f"  ⚠️ Using {len(close_matches)} close matches (right chapter, wrong verse)")
+                print(f"  ⚠️ Using {len(close_matches)} close matches (right chapter)")
                 results_to_use = close_matches[:k]
             else:
-                print(f"  ⚠️ No exact matches, using top {k} semantic results")
-                results_to_use = results[:k]
-            
+                print(f"  ⚠️ No exact matches found - returning empty (not falling back to wrong verses)")
+                results_to_use = []  # Return empty rather than wrong verses
+
             for doc, score in results_to_use:
                 retrieved_chunks.append({
                     'content': doc.page_content,
                     'score': float(score),
                     'metadata': doc.metadata
                 })
+
         else:
-            # No verse reference - just use semantic results
+            # No verse reference - use semantic results
             for i, (doc, score) in enumerate(results[:k]):
                 meta = doc.metadata
                 book = meta.get('book', 'NO_BOOK')
                 chapter = meta.get('chapter', 'NO_CH')
                 verse_start = meta.get('verse_start', 'NO_V')
-                
                 print(f"  Result {i+1}: {book} {chapter}:{verse_start} (score={score:.3f})")
-                
                 retrieved_chunks.append({
                     'content': doc.page_content,
                     'score': float(score),
                     'metadata': doc.metadata
                 })
-        
+
         print(f"✓ Retrieved {len(retrieved_chunks)} chunks")
         return retrieved_chunks
     
