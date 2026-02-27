@@ -576,14 +576,17 @@ class RAGService:
         # Extract verse reference if present
         verse_ref = self._extract_verse_reference(query)
 
-        # Get MORE results than needed for filtering
-        search_k = k * 10 if verse_ref else k  # Increased from k*5 to k*10
-        results = self.vectorstore.similarity_search_with_score(query, k=search_k)
-
-        retrieved_chunks = []
-
         if verse_ref:
             print(f"  📍 Looking for: {verse_ref['book']} {verse_ref['chapter']}:{verse_ref['verse_start']}-{verse_ref['verse_end']}")
+
+            # Use a very specific search query to maximise chance of finding the right chunk
+            # Search for just "Book Chapter:Verse" e.g. "Proverbs 22:12"
+            specific_query = f"{verse_ref['book']} {verse_ref['chapter']}:{verse_ref['verse_start']}"
+            
+            # Use large search_k to cast a wide net — verse may not rank in top 30
+            search_k = 100
+
+            results = self.vectorstore.similarity_search_with_score(specific_query, k=search_k)
 
             exact_matches = []
             close_matches = []
@@ -596,7 +599,6 @@ class RAGService:
 
                 target_book = verse_ref['book'].lower()
 
-                # Use robust book matching
                 book_matches = self._books_match(doc_book, target_book)
                 chapter_matches = (doc_chapter == verse_ref['chapter'])
                 verse_matches = (verse_ref['verse_start'] <= doc_verse <= verse_ref['verse_end'])
@@ -610,17 +612,17 @@ class RAGService:
                     close_matches.append((doc, score))
                     print(f"      ~ CLOSE MATCH (right book+chapter, wrong verse)")
 
-            # Use exact matches if found, otherwise close matches, otherwise semantic
             if exact_matches:
                 print(f"  ✅ Using {len(exact_matches)} exact matches")
                 results_to_use = exact_matches[:k]
             elif close_matches:
                 print(f"  ⚠️ Using {len(close_matches)} close matches (right chapter)")
-                results_to_use = close_matches[:k]
+                results_to_use = close_matches[:1]  # Only use closest verse in chapter
             else:
-                print(f"  ⚠️ No exact matches found - returning empty (not falling back to wrong verses)")
-                results_to_use = []  # Return empty rather than wrong verses
+                print(f"  ⚠️ No matches found")
+                results_to_use = []
 
+            retrieved_chunks = []
             for doc, score in results_to_use:
                 retrieved_chunks.append({
                     'content': doc.page_content,
@@ -629,7 +631,10 @@ class RAGService:
                 })
 
         else:
-            # No verse reference - use semantic results
+            # No verse reference — use semantic search on original query
+            search_k = k * 3
+            results = self.vectorstore.similarity_search_with_score(query, k=search_k)
+            retrieved_chunks = []
             for i, (doc, score) in enumerate(results[:k]):
                 meta = doc.metadata
                 book = meta.get('book', 'NO_BOOK')
