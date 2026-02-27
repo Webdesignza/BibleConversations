@@ -652,36 +652,46 @@ class RAGService:
     
     
     def _build_rag_prompt(self, query: str, retrieved_chunks: List[Dict]) -> str:
-        """Construct prompt with Bible translation context and query - COMPLETELY UNBIASED"""
-        context = "\n\n---\n\n".join([chunk['content'] for chunk in retrieved_chunks])
+        """Construct prompt - forces LLM to only use retrieved text, never memory"""
         
-        # Get current translation name
+        # Build context with explicit verse labels
+        context_parts = []
+        for chunk in retrieved_chunks:
+            meta = chunk.get('metadata', {})
+            book = meta.get('book', '')
+            chapter = meta.get('chapter', '')
+            verse = meta.get('verse_start', '')
+            label = f"[{book} {chapter}:{verse}]" if book and chapter and verse else "[verse]"
+            context_parts.append(f"{label} {chunk['content']}")
+        
+        context = "\n".join(context_parts)
+
         current_trans = self.get_current_translation()
         translation_name = current_trans['name'] if current_trans else "the Bible"
-        
-        prompt = f"""You are a Bible reference assistant. Your ONLY job is to find and quote Bible verses that directly answer the user's question.
 
-The user is reading from: {translation_name}
+        prompt = f"""You are a Bible verse lookup tool. You ONLY output what is written in the RETRIEVED TEXT below.
 
-STRICT RULES:
-1. ONLY use verses from the BIBLE TEXT provided below that DIRECTLY relate to the user's question
-2. If the provided text does not contain relevant verses for this specific question, say: "I don't have relevant verses for that question in the passages I retrieved. Try rephrasing or asking for a specific verse reference."
-3. DO NOT use verses from previous questions or conversations - only the text provided below
-4. DO NOT add interpretation, opinion, or theological commentary
-5. DO NOT fabricate or recall verses from memory - ONLY quote from the BIBLE TEXT section below
-6. If asked for interpretation, respond: "I provide only what the text says. For interpretation, please consult a pastor, theologian, or Bible study guide."
-7. Quote verse ranges naturally (e.g., "John 3:16-18 says:") without repeating the verse number for each line
-8. If comparing translations, only note the different wording — no commentary on which is better
+    Translation: {translation_name}
 
-BIBLE TEXT RETRIEVED FOR THIS QUESTION (from {translation_name}):
-{context}
+    RETRIEVED TEXT:
+    {context}
 
-USER'S QUESTION: {query}
+    USER REQUEST: {query}
 
-IMPORTANT: If the bible text above does not contain verses directly relevant to "{query}", say so clearly. Do NOT answer from memory or prior context.
+    STRICT RULES - READ CAREFULLY:
+    1. ONLY quote the text shown in RETRIEVED TEXT above
+    2. NEVER use your training knowledge or memory to provide Bible verses
+    3. NEVER substitute a different verse if the requested one is in the RETRIEVED TEXT
+    4. The RETRIEVED TEXT is the authoritative source - trust it completely
+    5. Start your response with the exact verse reference (e.g. "Proverbs 22:12 says:")
+    6. Then quote ONLY the text from RETRIEVED TEXT - word for word
+    7. Do not add commentary, context or explanation
+    8. If RETRIEVED TEXT is empty, say: "I could not retrieve that verse. Please try again."
 
-YOUR RESPONSE: (Bible text only, no interpretation, natural verse ranges):"""
-        
+    IMPORTANT: The RETRIEVED TEXT above contains the correct verse. Use it exactly as shown. Do not replace it with a different verse from memory.
+
+    RESPONSE:"""
+
         return prompt
     
     
