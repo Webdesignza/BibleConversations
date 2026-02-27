@@ -854,30 +854,28 @@ YOUR RESPONSE: (Bible text only, no interpretation, natural verse ranges):"""
     
     
     def _build_comparison_table_direct(self, question: str, comparisons: List[Dict]) -> str:
-        """Build comparison table directly from retrieved chunks - NO AI"""
+        """Build comparison table directly from retrieved chunks - mobile friendly"""
         
-        # Build table headers
         headers = ['Passage'] + [c['translation_name'] for c in comparisons]
         
-        # Build table HTML
-        table_html = '<table class="comparison-table">\n<tr>\n'
+        table_html = '<table class="comparison-table">\n<thead>\n<tr>\n'
         for header in headers:
             table_html += f'<th>{header}</th>\n'
-        table_html += '</tr>\n'
+        table_html += '</tr>\n</thead>\n<tbody>\n<tr>\n'
         
-        # Build data row
-        table_html += '<tr>\n'
+        # Passage cell
         table_html += f'<td>{question}</td>\n'
         
+        # Translation cells with data-label for mobile
         for comp in comparisons:
+            label = comp['translation_name']
             if comp['chunks']:
-                # Join all chunk content
                 text = ' '.join([chunk['content'] for chunk in comp['chunks']])
-                table_html += f'<td>{text}</td>\n'
+                table_html += f'<td data-label="{label}">{text}</td>\n'
             else:
-                table_html += '<td>Not found</td>\n'
+                table_html += f'<td data-label="{label}">Not found</td>\n'
         
-        table_html += '</tr>\n</table>'
+        table_html += '</tr>\n</tbody>\n</table>'
         
         return table_html
     

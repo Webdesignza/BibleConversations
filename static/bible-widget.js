@@ -167,6 +167,8 @@
         },
         
         // Inject CSS
+        // ============================================================
+        
         injectStyles() {
             const styles = `
                 #bible-btn {
@@ -182,7 +184,7 @@
                     font-weight: 600;
                     cursor: pointer;
                     box-shadow: 0 4px 15px rgba(30, 58, 138, 0.4);
-                    z-index: 9998;
+                    z-index: 999999;
                     transition: transform 0.3s;
                     font-family: 'Segoe UI', sans-serif;
                 }
@@ -197,17 +199,20 @@
                     top: 0;
                     left: 0;
                     width: 100%;
-                    height: 100vh;
-                    background: rgba(0, 0, 0, 0.7);
-                    z-index: 9999;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.85);
+                    z-index: 999998;
                     backdrop-filter: blur(5px);
+                    -webkit-backdrop-filter: blur(5px);
                     align-items: center;
                     justify-content: center;
+                    pointer-events: none;
                 }
                 
                 #bible-overlay.active {
                     display: flex;
                     animation: fadeIn 0.3s;
+                    pointer-events: all;
                 }
                 
                 @keyframes fadeIn {
@@ -218,12 +223,18 @@
                 #bible-popup {
                     background: white;
                     border-radius: 20px;
-                    width: 80%;
-                    max-width: 1400px;
-                    max-height: 90vh;
+                    width: 98vw;
+                    height: 98vh;
+                    max-width: 98vw;
+                    max-height: 98vh;
                     overflow-y: auto;
-                    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+                    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
                     animation: slideUp 0.3s;
+                    display: flex;
+                    flex-direction: column;
+                    position: relative;
+                    z-index: 999999;
+                    pointer-events: all;
                 }
                 
                 @keyframes slideUp {
@@ -238,6 +249,7 @@
                     text-align: center;
                     border-radius: 20px 20px 0 0;
                     position: relative;
+                    flex-shrink: 0;
                 }
                 
                 .bible-header h2 {
@@ -262,8 +274,8 @@
                 .bible-content {
                     padding: 30px;
                     text-align: center;
-                    flex: 1;                   /* ADD THIS - takes remaining space */
-                    overflow-y: auto;          /* ADD THIS - makes content scrollable */
+                    flex: 1;
+                    overflow-y: auto;
                 }
                 
                 .translation-selector {
@@ -448,6 +460,10 @@
                     background: #fef3c7;
                 }
                 
+                /* =============================================
+                COMPARISON TABLE - Desktop: side by side
+                Mobile: stacked vertically
+                ============================================= */
                 .comparison-table {
                     width: 100%;
                     border-collapse: collapse;
@@ -493,6 +509,75 @@
                 .comparison-table td:not(:first-child) {
                     width: auto;
                     min-width: 200px;
+                }
+
+                /* MOBILE: Stack table rows vertically */
+                @media (max-width: 600px) {
+                    .bible-content {
+                        padding: 15px;
+                    }
+
+                    .bible-header h2 {
+                        font-size: 18px;
+                    }
+
+                    .bible-avatar {
+                        width: 120px;
+                        height: 120px;
+                    }
+
+                    .comparison-table,
+                    .comparison-table thead,
+                    .comparison-table tbody,
+                    .comparison-table th,
+                    .comparison-table td,
+                    .comparison-table tr {
+                        display: block;
+                        width: 100%;
+                    }
+
+                    .comparison-table thead {
+                        display: none;
+                    }
+
+                    .comparison-table tr {
+                        margin-bottom: 20px;
+                        border: 2px solid #1E3A8A;
+                        border-radius: 8px;
+                        overflow: hidden;
+                    }
+
+                    .comparison-table td {
+                        padding: 10px 12px;
+                        border: none;
+                        border-bottom: 1px solid #e5e7eb;
+                        min-width: unset;
+                        width: 100%;
+                    }
+
+                    .comparison-table td:first-child {
+                        background: linear-gradient(135deg, #1E3A8A 0%, #D97706 100%);
+                        color: white;
+                        font-weight: 700;
+                        white-space: normal;
+                        width: 100%;
+                    }
+
+                    /* Label each cell with the translation name using data-label */
+                    .comparison-table td::before {
+                        content: attr(data-label);
+                        display: block;
+                        font-weight: 700;
+                        color: #1E3A8A;
+                        font-size: 11px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                        margin-bottom: 4px;
+                    }
+
+                    .comparison-table td:first-child::before {
+                        display: none;
+                    }
                 }
                 
                 .input-mode-toggle {
@@ -546,6 +631,7 @@
                     font-family: 'Segoe UI', sans-serif;
                     resize: vertical;
                     min-height: 60px;
+                    box-sizing: border-box;
                 }
                 
                 #bible-text-input:focus {
