@@ -1235,7 +1235,7 @@
                     },
                     body: JSON.stringify({
                         text: text,
-                        voice: 'en-US-JennyNeural',
+                        voice: 'en-GB-RyanNeural',
                         rate: '+0%',
                         pitch: '+0Hz'
                     })
