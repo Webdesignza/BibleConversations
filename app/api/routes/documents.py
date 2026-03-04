@@ -55,6 +55,68 @@ async def upload_document_to_translation(
             detail=f"Upload failed: {str(e)}"
         )
 
+@router.post("/{translation_id}/reset")
+async def reset_translation(
+    translation_id: str,
+    api_key: str = Depends(verify_api_key)
+):
+    """
+    Force delete ChromaDB data for a translation and reset it to empty.
+    Use this before re-uploading a translation file.
+    """
+    import shutil
+    from pathlib import Path
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    try:
+        rag_service = get_rag_service()
+        translations_metadata = rag_service._load_translations_metadata()
+
+        if translation_id not in translations_metadata:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Translation '{translation_id}' not found"
+            )
+
+        # Force delete the ChromaDB directory
+        chroma_path = Path(settings.CHROMA_DB_PATH) / translation_id
+        print(f"Deleting ChromaDB at: {chroma_path}")
+
+        if chroma_path.exists():
+            shutil.rmtree(chroma_path)
+            print(f"✓ Deleted {chroma_path}")
+        else:
+            print(f"⚠️ Path did not exist: {chroma_path}")
+
+        # Re-create empty directory
+        chroma_path.mkdir(parents=True, exist_ok=True)
+        print(f"✓ Re-created empty directory: {chroma_path}")
+
+        # Reset chunk count in metadata
+        translations_metadata[translation_id]['chunks'] = 0
+        rag_service._save_translations_metadata(translations_metadata)
+
+        # Clear vectorstore cache if this is the active translation
+        if rag_service.current_translation == translation_id:
+            rag_service.vectorstore = None
+            rag_service.current_translation = None
+
+        return {
+            'success': True,
+            'message': f"Translation '{translation_id}' reset successfully. You can now re-upload.",
+            'translation_id': translation_id,
+            'path': str(chroma_path)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Reset failed: {str(e)}"
+        )
 
 @router.get("/upload-status/{job_id}")
 async def get_upload_status(
