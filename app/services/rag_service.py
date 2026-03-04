@@ -560,31 +560,55 @@ class RAGService:
         return clean_doc == clean_target or clean_doc.startswith(clean_target)
 
 
+    def _get_smart_k(self, query: str, verse_ref: dict = None) -> int:
+        """
+        Automatically determine how many chunks to retrieve based on query type:
+        - Single verse (John 3:16) → 1
+        - Verse range (Proverbs 1:1-14) → number of verses in range
+        - Theme/concept (what does Bible say about sin) → 5
+        """
+        if verse_ref:
+            verse_start = verse_ref.get('verse_start', 1)
+            verse_end = verse_ref.get('verse_end', verse_start)
+            
+            # Whole chapter requested (verse_end = 999)
+            if verse_end == 999:
+                return 50  # Get up to 50 verses for whole chapter
+            
+            # Verse range (e.g. 1-14 = 14 verses)
+            num_verses = verse_end - verse_start + 1
+            if num_verses > 1:
+                return num_verses  # Return exactly as many as requested
+            
+            # Single verse
+            return 1
+        
+        # No verse reference = concept/theme query → return multiple verses
+        return 5
+
+
     def _retrieve_relevant_chunks(self, query: str, k: int = None) -> List[Dict]:
         """
-        Retrieve relevant chunks using semantic search + smart filtering
-        Used by BOTH single mode and comparison mode (after switching translation)
+        Retrieve relevant chunks using semantic search + smart filtering.
+        k from widget is ignored for verse queries — smart k is used instead.
         """
         if not self.vectorstore:
             return []
 
-        if k is None:
-            k = settings.RETRIEVAL_K
-
-        print(f"🔍 Searching for: '{query}' (k={k})")
+        print(f"🔍 Searching for: '{query}'")
 
         # Extract verse reference if present
         verse_ref = self._extract_verse_reference(query)
 
+        # Override k with smart detection
+        smart_k = self._get_smart_k(query, verse_ref)
+        print(f"  📊 Smart k={smart_k} ({'verse range' if verse_ref and verse_ref.get('verse_end', 1) > verse_ref.get('verse_start', 1) else 'single verse' if verse_ref else 'concept/theme'} query)")
+
         if verse_ref:
             print(f"  📍 Looking for: {verse_ref['book']} {verse_ref['chapter']}:{verse_ref['verse_start']}-{verse_ref['verse_end']}")
 
-            # Use a very specific search query to maximise chance of finding the right chunk
-            # Search for just "Book Chapter:Verse" e.g. "Proverbs 22:12"
             specific_query = f"{verse_ref['book']} {verse_ref['chapter']}:{verse_ref['verse_start']}"
-            
-            # Use large search_k to cast a wide net — verse may not rank in top 30
-            search_k = 100
+            search_k = 100  # Always cast wide net
 
             results = self.vectorstore.similarity_search_with_score(specific_query, k=search_k)
 
@@ -613,11 +637,14 @@ class RAGService:
                     print(f"      ~ CLOSE MATCH (right book+chapter, wrong verse)")
 
             if exact_matches:
-                print(f"  ✅ Using {len(exact_matches)} exact matches")
-                results_to_use = exact_matches[:k]
+                # Sort by verse number so they come out in order
+                exact_matches.sort(key=lambda x: x[0].metadata.get('verse_start', 0))
+                print(f"  ✅ Using {min(len(exact_matches), smart_k)} exact matches")
+                results_to_use = exact_matches[:smart_k]
             elif close_matches:
-                print(f"  ⚠️ Using {len(close_matches)} close matches (right chapter)")
-                results_to_use = close_matches[:1]  # Only use closest verse in chapter
+                close_matches.sort(key=lambda x: x[0].metadata.get('verse_start', 0))
+                print(f"  ⚠️ Using 1 close match (right chapter, wrong verse)")
+                results_to_use = close_matches[:1]
             else:
                 print(f"  ⚠️ No matches found")
                 results_to_use = []
@@ -631,11 +658,10 @@ class RAGService:
                 })
 
         else:
-            # No verse reference — use semantic search on original query
-            search_k = k * 3
-            results = self.vectorstore.similarity_search_with_score(query, k=search_k)
+            # Concept/theme query — semantic search, return smart_k results
+            results = self.vectorstore.similarity_search_with_score(query, k=search_k if False else 50)
             retrieved_chunks = []
-            for i, (doc, score) in enumerate(results[:k]):
+            for i, (doc, score) in enumerate(results[:smart_k]):
                 meta = doc.metadata
                 book = meta.get('book', 'NO_BOOK')
                 chapter = meta.get('chapter', 'NO_CH')
