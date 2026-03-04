@@ -90,9 +90,7 @@ class DocumentService:
     def _parse_bible_text(self, documents, filename: str, translation_id: str):
         """
         Parse Bible text and create chunks with proper metadata
-        Handles multiple formats:
-        - KJV/ASV: "Genesis 1:1\tIn the beginning..."
-        - ESV: Chapter headers + verse numbers only
+        Handles multiple formats including multi-line verses.
         """
         import re
         
@@ -100,91 +98,97 @@ class DocumentService:
         current_book = None
         current_chapter = None
         
+        # Buffer for accumulating multi-line verses
+        pending_book = None
+        pending_chapter = None
+        pending_verse = None
+        pending_text = None
+
+        def flush_pending():
+            """Save the buffered verse as a chunk"""
+            if pending_book and pending_chapter and pending_verse and pending_text:
+                chunk = Document(
+                    page_content=f"{pending_book} {pending_chapter}:{pending_verse} - {pending_text.strip()}",
+                    metadata={
+                        'source': filename,
+                        'translation_id': translation_id,
+                        'book': pending_book,
+                        'chapter': pending_chapter,
+                        'verse_start': pending_verse,
+                        'verse_end': pending_verse
+                    }
+                )
+                chunks.append(chunk)
+
         for doc in documents:
             lines = doc.page_content.split('\n')
-            
+
             for line in lines:
                 line = line.strip()
                 if not line:
                     continue
-                
+
                 # Check for book header (all caps): "GENESIS", "EXODUS", etc.
                 if line.isupper() and len(line.split()) <= 3 and len(line) > 2:
-                    # Potential book name
-                    potential_book = line.title()  # Convert "GENESIS" to "Genesis"
-                    # Verify it's a reasonable book name (alphabetic, possibly with numbers)
+                    potential_book = line.title()
                     if re.match(r'^[A-Za-z0-9\s]+$', potential_book):
+                        flush_pending()
+                        pending_book = pending_chapter = pending_verse = pending_text = None
                         current_book = potential_book
                         print(f"Found book: {current_book}")
                         continue
-                
-                # Check for chapter header: "Chapter 1", "Chapter 23", etc.
+
+                # Check for chapter header: "Chapter 1"
                 chapter_match = re.match(r'^Chapter\s+(\d+)$', line, re.IGNORECASE)
                 if chapter_match:
+                    flush_pending()
+                    pending_book = pending_chapter = pending_verse = pending_text = None
                     current_chapter = int(chapter_match.group(1))
                     print(f"Found chapter: {current_book} {current_chapter}")
                     continue
-                
-                # Format 1: KJV/ASV with tab: "Genesis 1:1\tText"
-                verse_pattern_tab = r'^([A-Za-z0-9\s]+?)\s+(\d+):(\d+)\t(.+)$'
-                match = re.match(verse_pattern_tab, line)
-                
+
+                # Format 1: "Genesis 1:1\tText" (tab separated)
+                match = re.match(r'^([A-Za-z0-9\s]+?)\s+(\d+):(\d+)\t(.+)$', line)
                 if match:
-                    book = match.group(1).strip()
-                    chapter = int(match.group(2))
-                    verse = int(match.group(3))
-                    text = match.group(4).strip()
-                    
-                    current_book = book
-                    current_chapter = chapter
-                else:
-                    # Format 2: KJV/ASV with space: "Genesis 1:1 Text"
-                    verse_pattern_space = r'^([A-Za-z0-9\s]+?)\s+(\d+):(\d+)\s+(.+)$'
-                    match = re.match(verse_pattern_space, line)
-                    
+                    flush_pending()
+                    pending_book = match.group(1).strip()
+                    pending_chapter = int(match.group(2))
+                    pending_verse = int(match.group(3))
+                    pending_text = match.group(4).strip()
+                    current_book = pending_book
+                    current_chapter = pending_chapter
+                    continue
+
+                # Format 2: "Genesis 1:1 Text" (space separated)
+                match = re.match(r'^([A-Za-z0-9\s]+?)\s+(\d+):(\d+)\s+(.+)$', line)
+                if match:
+                    flush_pending()
+                    pending_book = match.group(1).strip()
+                    pending_chapter = int(match.group(2))
+                    pending_verse = int(match.group(3))
+                    pending_text = match.group(4).strip()
+                    current_book = pending_book
+                    current_chapter = pending_chapter
+                    continue
+
+                # Format 3: ESV style - just verse number: "2 Text"
+                if current_book and current_chapter:
+                    match = re.match(r'^(\d+)\s+(.+)$', line)
                     if match:
-                        book = match.group(1).strip()
-                        chapter = int(match.group(2))
-                        verse = int(match.group(3))
-                        text = match.group(4).strip()
-                        
-                        current_book = book
-                        current_chapter = chapter
-                    else:
-                        # Format 3: ESV style - just verse number: "1 Text" or "2Text"
-                        # Need current_book and current_chapter from headers
-                        if current_book and current_chapter:
-                            # Try single verse number: "2Text" or "2 Text"
-                            esv_pattern = r'^(\d+)\s+(.+)$'
-                            match = re.match(esv_pattern, line)
-                            
-                            if match:
-                                verse = int(match.group(1))
-                                text = match.group(2).strip()
-                                book = current_book
-                                chapter = current_chapter
-                            else:
-                                # Not a verse, skip
-                                continue
-                        else:
-                            # No context, skip this line
-                            continue
-                
-                if match and book and chapter:
-                    # Create chunk with full metadata
-                    chunk = Document(
-                        page_content=f"{book} {chapter}:{verse} - {text}",
-                        metadata={
-                            'source': filename,
-                            'translation_id': translation_id,
-                            'book': book,
-                            'chapter': chapter,
-                            'verse_start': verse,
-                            'verse_end': verse
-                        }
-                    )
-                    chunks.append(chunk)
-        
+                        flush_pending()
+                        pending_book = current_book
+                        pending_chapter = current_chapter
+                        pending_verse = int(match.group(1))
+                        pending_text = match.group(2).strip()
+                        continue
+
+                # No verse pattern matched — this is a CONTINUATION line of the previous verse
+                if pending_text is not None:
+                    pending_text += ' ' + line
+
+        # Don't forget the very last verse
+        flush_pending()
+
         print(f"✓ Parsed {len(chunks)} verses from Bible text")
         return chunks
     
