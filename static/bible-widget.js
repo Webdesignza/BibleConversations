@@ -509,6 +509,10 @@
                 .comparison-table td:not(:first-child) {
                     width: auto;
                     min-width: 200px;
+                    white-space: normal;       /* ADD THIS */
+                    word-wrap: break-word;     /* ADD THIS */
+                    overflow: visible;         /* ADD THIS */
+                    max-width: none;           /* ADD THIS */
                 }
 
                 /* MOBILE: Stack table rows vertically */
@@ -1137,7 +1141,9 @@
                             <div class="comparison-summary">
                                 <strong>📊 Comparison Result:</strong> ${answer}
                             </div>
-                            ${tableHtml}
+                            <div style="overflow-x: auto; width: 100%;">
+                                ${tableHtml}
+                            </div>
                         `;
                     }
                     

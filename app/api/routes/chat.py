@@ -19,7 +19,7 @@ class CompareRequest(BaseModel):
     """Request model for translation comparison"""
     question: str
     translation_ids: List[str]  # e.g., ["kjv", "niv", "esv"]
-    k: int = 3
+    k: int = 10
     include_chunks: bool = False
 
 
