@@ -60,13 +60,11 @@ async def reset_translation(
     translation_id: str,
     api_key: str = Depends(verify_api_key)
 ):
-    """
-    Force delete ChromaDB data for a translation and reset it to empty.
-    Use this before re-uploading a translation file.
-    """
     import shutil
     from pathlib import Path
     from app.core.config import get_settings
+    import chromadb
+
     settings = get_settings()
 
     try:
@@ -74,49 +72,57 @@ async def reset_translation(
         translations_metadata = rag_service._load_translations_metadata()
 
         if translation_id not in translations_metadata:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Translation '{translation_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Translation '{translation_id}' not found")
 
-        # Force delete the ChromaDB directory
         chroma_path = Path(settings.CHROMA_DB_PATH) / translation_id
-        print(f"Deleting ChromaDB at: {chroma_path}")
+        print(f"Resetting ChromaDB at: {chroma_path}")
 
+        # Step 1: Use ChromaDB client to explicitly delete the collection first
+        if chroma_path.exists():
+            try:
+                client = chromadb.PersistentClient(path=str(chroma_path))
+                collections = client.list_collections()
+                for col in collections:
+                    client.delete_collection(col.name)
+                    print(f"✓ Deleted collection: {col.name}")
+            except Exception as e:
+                print(f"⚠️ Could not delete collections (will still wipe directory): {e}")
+
+        # Step 2: Now wipe the entire directory
         if chroma_path.exists():
             shutil.rmtree(chroma_path)
-            print(f"✓ Deleted {chroma_path}")
-        else:
-            print(f"⚠️ Path did not exist: {chroma_path}")
+            print(f"✓ Deleted directory: {chroma_path}")
 
-        # Re-create empty directory
+        # Step 3: Recreate empty directory
         chroma_path.mkdir(parents=True, exist_ok=True)
-        print(f"✓ Re-created empty directory: {chroma_path}")
+        print(f"✓ Recreated empty directory")
 
-        # Reset chunk count in metadata
+        # Step 4: Reset chunk count in metadata
         translations_metadata[translation_id]['chunks'] = 0
         rag_service._save_translations_metadata(translations_metadata)
 
-        # Clear vectorstore cache if this is the active translation
+        # Step 5: Clear ALL cached vectorstore references (both services)
         if rag_service.current_translation == translation_id:
             rag_service.vectorstore = None
             rag_service.current_translation = None
 
+        # Also clear document_service embeddings cache if it holds a vectorstore
+        from app.services.document_service import get_document_service
+        doc_service = get_document_service()
+        # Force a fresh Chroma instance on next upload by doing nothing —
+        # document_service creates Chroma inline so it will pick up the empty dir naturally
+
         return {
             'success': True,
-            'message': f"Translation '{translation_id}' reset successfully. You can now re-upload.",
-            'translation_id': translation_id,
-            'path': str(chroma_path)
+            'message': f"Translation '{translation_id}' reset successfully.",
+            'translation_id': translation_id
         }
 
     except HTTPException:
         raise
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Reset failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Reset failed: {str(e)}")
 
 @router.get("/upload-status/{job_id}")
 async def get_upload_status(
