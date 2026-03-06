@@ -143,6 +143,10 @@
             background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%);
         }
 
+        .btn-warning {
+            background: linear-gradient(135deg, #D97706 0%, #B45309 100%);
+        }
+
         .btn-secondary {
             background: #6B7280;
         }
@@ -503,6 +507,9 @@
                         <button class="btn" onclick="openUploadModal('${trans.id}', '${trans.name}')">
                             📤 Upload
                         </button>
+                        <button class="btn btn-warning" onclick="resetTranslation('${trans.id}', '${trans.name}')">
+                            🔄 Reset
+                        </button>
                         <button class="btn btn-danger" onclick="openDeleteModal('${trans.id}', '${trans.name}')">
                             🗑️ Delete
                         </button>
@@ -555,6 +562,36 @@
 
             } catch (error) {
                 showStatus('Failed to create translation: ' + error.message, 'error');
+            }
+        }
+
+        async function resetTranslation(translationId, translationName) {
+            const apiKey = getApiKey();
+            if (!apiKey) {
+                showStatus('Please enter your API key', 'error');
+                return;
+            }
+
+            if (!confirm(`Reset "${translationName}"? This will wipe all chunks so you can re-upload a fresh file.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/documents/${translationId}/reset`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${apiKey}` }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showStatus('✅ Reset successful! You can now re-upload the file for this translation.', 'success');
+                    setTimeout(loadTranslations, 1000);
+                } else {
+                    showStatus('Reset failed: ' + (data.detail || data.message), 'error');
+                }
+            } catch (error) {
+                showStatus('Reset failed: ' + error.message, 'error');
             }
         }
 
