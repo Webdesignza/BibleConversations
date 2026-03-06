@@ -188,8 +188,6 @@ async def reset_translation(
     import stat
     from pathlib import Path
     from app.core.config import get_settings
-    import chromadb
-
     settings = get_settings()
 
     try:
@@ -202,34 +200,22 @@ async def reset_translation(
         chroma_path = Path(settings.CHROMA_DB_PATH) / translation_id
         print(f"Resetting ChromaDB at: {chroma_path}")
 
-        # Step 1: Clear RAG service cache FIRST before touching the directory
+        # Step 1: Clear RAG service cache first
         if rag_service.current_translation == translation_id:
             rag_service.vectorstore = None
             rag_service.current_translation = None
 
-        # Step 2: Use ChromaDB client to explicitly delete collections
-        if chroma_path.exists():
-            try:
-                client = chromadb.PersistentClient(path=str(chroma_path))
-                collections = client.list_collections()
-                for col in collections:
-                    client.delete_collection(col.name)
-                    print(f"✓ Deleted collection: {col.name}")
-                del client  # Release the client and its SQLite lock
-            except Exception as e:
-                print(f"⚠️ Could not delete collections: {e}")
-
-        # Step 3: Wipe the directory
+        # Step 2: Wipe directory - no PersistentClient needed
         if chroma_path.exists():
             shutil.rmtree(chroma_path)
             print(f"✓ Deleted directory: {chroma_path}")
 
-        # Step 4: Recreate with explicit write permissions
+        # Step 3: Recreate with full permissions
         chroma_path.mkdir(parents=True, exist_ok=True)
-        chroma_path.chmod(stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # 777
-        print(f"✓ Recreated directory with write permissions: {oct(chroma_path.stat().st_mode)}")
+        chroma_path.chmod(stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+        print(f"✓ Recreated empty directory with 777 permissions")
 
-        # Step 5: Reset chunk count in metadata
+        # Step 4: Reset chunk count in metadata
         translations_metadata[translation_id]['chunks'] = 0
         rag_service._save_translations_metadata(translations_metadata)
 
