@@ -155,6 +155,66 @@ async def get_translation_stats(
             detail=f"Failed to get stats: {str(e)}"
         )
 
+@router.post("/{translation_id}/reset")
+async def reset_translation(
+    translation_id: str,
+    api_key: str = Depends(verify_api_key)
+):
+    """
+    Wipe ChromaDB data for a translation so it can be re-uploaded cleanly.
+    """
+    import shutil
+    import stat
+    from pathlib import Path
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    try:
+        rag_service = get_rag_service()
+        translations_metadata = rag_service._load_translations_metadata()
+
+        if translation_id not in translations_metadata:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Translation '{translation_id}' not found"
+            )
+
+        chroma_path = Path(settings.CHROMA_DB_PATH) / translation_id
+        print(f"Resetting ChromaDB at: {chroma_path}")
+
+        # Clear RAG service cache first
+        if rag_service.current_translation == translation_id:
+            rag_service.vectorstore = None
+            rag_service.current_translation = None
+
+        # Wipe the directory
+        if chroma_path.exists():
+            shutil.rmtree(chroma_path)
+            print(f"✓ Deleted directory: {chroma_path}")
+
+        # Recreate empty with full permissions
+        chroma_path.mkdir(parents=True, exist_ok=True)
+        chroma_path.chmod(stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+        print(f"✓ Recreated empty directory")
+
+        # Reset chunk count in metadata
+        translations_metadata[translation_id]['chunks'] = 0
+        rag_service._save_translations_metadata(translations_metadata)
+
+        return {
+            'success': True,
+            'message': f"Translation '{translation_id}' reset successfully. You can now re-upload.",
+            'translation_id': translation_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Reset failed: {str(e)}"
+        )
 
 @router.get("/stats")
 async def get_all_stats(api_key: str = Depends(verify_api_key)):
