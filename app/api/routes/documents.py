@@ -155,6 +155,7 @@ async def get_translation_stats(
             detail=f"Failed to get stats: {str(e)}"
         )
 
+
 @router.post("/{translation_id}/reset")
 async def reset_translation(
     translation_id: str,
