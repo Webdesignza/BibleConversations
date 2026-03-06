@@ -587,7 +587,7 @@
 
                 if (data.success) {
                     showStatus('✅ Reset successful! You can now re-upload the file for this translation.', 'success');
-                    setTimeout(loadTranslations, 1000);
+                    setTimeout(() => location.reload(), 1500);
                 } else {
                     showStatus('Reset failed: ' + (data.detail || data.message), 'error');
                 }
