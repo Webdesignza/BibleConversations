@@ -241,3 +241,29 @@ async def get_all_stats(api_key: str = Depends(verify_api_key)):
             status_code=500,
             detail=f"Failed to get stats: {str(e)}"
         )
+    
+
+@router.delete("/nuke/{translation_id}")
+async def nuke_translation(
+    translation_id: str,
+    api_key: str = Depends(verify_api_key)
+):
+    """Nuclear option - force delete everything including SQLite files"""
+    import shutil, os
+    from pathlib import Path
+    from app.core.config import get_settings
+    settings = get_settings()
+    
+    chroma_path = Path(settings.CHROMA_DB_PATH) / translation_id
+    print(f"NUKE: {chroma_path}")
+    
+    # Delete every file individually first
+    if chroma_path.exists():
+        for f in chroma_path.rglob("*"):
+            if f.is_file():
+                os.remove(f)
+                print(f"Deleted file: {f}")
+        shutil.rmtree(chroma_path, ignore_errors=True)
+        print(f"Deleted directory: {chroma_path}")
+    
+    return {"nuked": str(chroma_path), "exists_after": chroma_path.exists()}
