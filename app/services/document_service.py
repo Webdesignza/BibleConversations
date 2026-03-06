@@ -229,6 +229,11 @@ class DocumentService:
             translation_path = self.chroma_base_path / translation_id
             translation_path.mkdir(parents=True, exist_ok=True)
             
+            # Fix: explicitly set write permissions (Railway filesystem issue)
+            import stat
+            translation_path.chmod(stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # 777
+            print(f"✓ Directory permissions set: {oct(translation_path.stat().st_mode)}")
+            
             vectorstore = Chroma(
                 persist_directory=str(translation_path),
                 embedding_function=self.embeddings                
