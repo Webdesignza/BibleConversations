@@ -61,10 +61,9 @@ async def reset_translation(
     api_key: str = Depends(verify_api_key)
 ):
     import shutil
+    import stat
     from pathlib import Path
     from app.core.config import get_settings
-    import chromadb
-
     settings = get_settings()
 
     try:
@@ -77,40 +76,24 @@ async def reset_translation(
         chroma_path = Path(settings.CHROMA_DB_PATH) / translation_id
         print(f"Resetting ChromaDB at: {chroma_path}")
 
-        # Step 1: Use ChromaDB client to explicitly delete the collection first
-        if chroma_path.exists():
-            try:
-                client = chromadb.PersistentClient(path=str(chroma_path))
-                collections = client.list_collections()
-                for col in collections:
-                    client.delete_collection(col.name)
-                    print(f"✓ Deleted collection: {col.name}")
-            except Exception as e:
-                print(f"⚠️ Could not delete collections (will still wipe directory): {e}")
-
-        # Step 2: Now wipe the entire directory
-        if chroma_path.exists():
-            shutil.rmtree(chroma_path)
-            print(f"✓ Deleted directory: {chroma_path}")
-
-        # Step 3: Recreate empty directory
-        chroma_path.mkdir(parents=True, exist_ok=True)
-        print(f"✓ Recreated empty directory")
-
-        # Step 4: Reset chunk count in metadata
-        translations_metadata[translation_id]['chunks'] = 0
-        rag_service._save_translations_metadata(translations_metadata)
-
-        # Step 5: Clear ALL cached vectorstore references (both services)
+        # Clear RAG service cache first
         if rag_service.current_translation == translation_id:
             rag_service.vectorstore = None
             rag_service.current_translation = None
 
-        # Also clear document_service embeddings cache if it holds a vectorstore
-        from app.services.document_service import get_document_service
-        doc_service = get_document_service()
-        # Force a fresh Chroma instance on next upload by doing nothing —
-        # document_service creates Chroma inline so it will pick up the empty dir naturally
+        # Wipe directory - no PersistentClient
+        if chroma_path.exists():
+            shutil.rmtree(chroma_path)
+            print(f"✓ Deleted directory: {chroma_path}")
+
+        # Recreate with full permissions
+        chroma_path.mkdir(parents=True, exist_ok=True)
+        chroma_path.chmod(stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+        print(f"✓ Recreated empty directory")
+
+        # Reset chunk count in metadata
+        translations_metadata[translation_id]['chunks'] = 0
+        rag_service._save_translations_metadata(translations_metadata)
 
         return {
             'success': True,
