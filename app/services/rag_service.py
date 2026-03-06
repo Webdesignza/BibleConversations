@@ -128,7 +128,6 @@ class RAGService:
                         if collections and len(collections) > 0:
                             actual_chunks = collections[0].count()
                             has_data = actual_chunks > 0
-                        del client  # ← ADD THIS to release SQLite lock
                     except Exception as e:
                         print(f"⚠️ Error checking {trans_id}: {e}")
                 
@@ -908,14 +907,14 @@ class RAGService:
         # Passage cell
         table_html += f'<td>{question}</td>\n'
         
-        # Translation cells - ADD style to force full text display
+        # Translation cells with data-label for mobile
         for comp in comparisons:
             label = comp['translation_name']
             if comp['chunks']:
                 text = ' '.join([chunk['content'] for chunk in comp['chunks']])
-                table_html += f'<td data-label="{label}" style="white-space: normal; word-wrap: break-word; overflow: visible; max-width: none;">{text}</td>\n'
+                table_html += f'<td data-label="{label}">{text}</td>\n'
             else:
-                table_html += f'<td data-label="{label}" style="white-space: normal; word-wrap: break-word;">Not found</td>\n'
+                table_html += f'<td data-label="{label}">Not found</td>\n'
         
         table_html += '</tr>\n</tbody>\n</table>'
         
