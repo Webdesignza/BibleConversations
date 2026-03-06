@@ -128,6 +128,7 @@ class RAGService:
                         if collections and len(collections) > 0:
                             actual_chunks = collections[0].count()
                             has_data = actual_chunks > 0
+                        del client  # ← ADD THIS to release SQLite lock
                     except Exception as e:
                         print(f"⚠️ Error checking {trans_id}: {e}")
                 
