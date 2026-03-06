@@ -179,49 +179,71 @@ async def get_upload_status(
         )
 
 
-@router.get("/{translation_id}/stats")
-async def get_translation_stats(
+@router.post("/{translation_id}/reset")
+async def reset_translation(
     translation_id: str,
     api_key: str = Depends(verify_api_key)
 ):
-    """
-    Get statistics for a specific translation
-    
-    Args:
-        translation_id: ID of the translation
-    
-    Returns:
-        Translation statistics
-    """
+    import shutil
+    import stat
+    from pathlib import Path
+    from app.core.config import get_settings
+    import chromadb
+
+    settings = get_settings()
+
     try:
         rag_service = get_rag_service()
         translations_metadata = rag_service._load_translations_metadata()
-        
+
         if translation_id not in translations_metadata:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Translation '{translation_id}' not found"
-            )
-        
-        translation_info = translations_metadata[translation_id]
-        
+            raise HTTPException(status_code=404, detail=f"Translation '{translation_id}' not found")
+
+        chroma_path = Path(settings.CHROMA_DB_PATH) / translation_id
+        print(f"Resetting ChromaDB at: {chroma_path}")
+
+        # Step 1: Clear RAG service cache FIRST before touching the directory
+        if rag_service.current_translation == translation_id:
+            rag_service.vectorstore = None
+            rag_service.current_translation = None
+
+        # Step 2: Use ChromaDB client to explicitly delete collections
+        if chroma_path.exists():
+            try:
+                client = chromadb.PersistentClient(path=str(chroma_path))
+                collections = client.list_collections()
+                for col in collections:
+                    client.delete_collection(col.name)
+                    print(f"✓ Deleted collection: {col.name}")
+                del client  # Release the client and its SQLite lock
+            except Exception as e:
+                print(f"⚠️ Could not delete collections: {e}")
+
+        # Step 3: Wipe the directory
+        if chroma_path.exists():
+            shutil.rmtree(chroma_path)
+            print(f"✓ Deleted directory: {chroma_path}")
+
+        # Step 4: Recreate with explicit write permissions
+        chroma_path.mkdir(parents=True, exist_ok=True)
+        chroma_path.chmod(stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # 777
+        print(f"✓ Recreated directory with write permissions: {oct(chroma_path.stat().st_mode)}")
+
+        # Step 5: Reset chunk count in metadata
+        translations_metadata[translation_id]['chunks'] = 0
+        rag_service._save_translations_metadata(translations_metadata)
+
         return {
             'success': True,
-            'translation_id': translation_id,
-            'name': translation_info.get('name', translation_id),
-            'total_chunks': translation_info.get('chunks', 0),
-            'created': translation_info.get('created', ''),
-            'description': translation_info.get('description', '')
+            'message': f"Translation '{translation_id}' reset successfully.",
+            'translation_id': translation_id
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get stats: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Reset failed: {str(e)}")
 
 
 @router.get("/stats")
