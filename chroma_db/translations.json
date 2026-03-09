@@ -3,30 +3,30 @@
     "name": "King James Version (KJV)",
     "description": "The King James Version (KJV), or Authorized Version, is an English translation of the Christian Bible commissioned by King James I and published in 1611. Known for its majestic, rhythmic prose, it was created by 47 scholars using a rigorous committee-based, formal equivalence (\"word-for-word\") approach based on original Hebrew, Greek, and earlier English translations.",
     "created": "2026-02-20T11:41:00.000000",
-    "chunks": 31102
+    "chunks": 30985
   },
   "NIV": {
     "name": "New International Version (NIV)",
     "description": "The New International Version (NIV) is a widely used, contemporary English translation of the Bible that balances literal accuracy with readability, often described as a \"thought-for-thought\" or dynamic equivalence translation. It was first published in 1978, with major revisions in 1984 and 2011, aimed at producing a clear, accurate Bible for modern readers, using recent critical editions of the original Hebrew, Aramaic, and Greek texts.",
     "created": "2026-02-25T08:50:18.688299",
-    "chunks": 30989
-  },
-  "ESV": {
-    "name": "English Standard Version (ESV)",
-    "description": "The English Standard Version (ESV) is an \"essentially literal\" Bible translation that prioritizes \"word-for-word\" accuracy, balancing precise translation with contemporary readability. It captures the original Hebrew, Aramaic, and Greek nuances while maintaining literary style, making it ideal for study, public reading, and personal devotions.",
-    "created": "2026-02-25T08:52:32.576068",
-    "chunks": 30002
+    "chunks": 30816
   },
   "CPDV": {
     "name": "Catholic Public Domain Version (CPDV)",
     "description": "The Catholic Public Domain Version (CPDV) is a modern English translation of the Bible (completed 2009) by Ronald L. Conte Jr.. It is designed to be free from copyright, based on the Latin Vulgate and the Challoner Douay-Rheims version. The CPDV includes all deuterocanonical books and is designed to adhere to Roman Catholic doctrine and Vatican translation norms.",
     "created": "2026-02-25T09:00:37.101439",
-    "chunks": 31102
+    "chunks": 30985
   },
   "ASV": {
     "name": "American Standard version  (ASV)",
     "description": "The American Standard Version (ASV) of 1901 is a highly literal, word-for-word English Bible translation, often considered a foundational \"standard\" for 20th-century American Protestantism. Derived from the English Revised Version (1881\u20131885), it updated the King James Version (KJV) to incorporate more accurate, recently discovered manuscripts.",
     "created": "2026-02-25T09:06:39.591779",
-    "chunks": 31086
+    "chunks": 30969
+  },
+  "ESV": {
+    "name": "English Standard Version (ESV)",
+    "description": "The English Standard Version (ESV) is a contemporary, \"essentially literal\" translation that prioritizes \"word-for-word\" accuracy, balancing precise fidelity to the original Hebrew, Aramaic, and Greek texts with readability. It is ideal for in-depth study, public worship, and personal reading, maintaining a formal, elegant style while updating archaic language.",
+    "created": "2026-02-25T13:54:55.076990",
+    "chunks": 30964
   }
 }
