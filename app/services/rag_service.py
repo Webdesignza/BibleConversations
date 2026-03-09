@@ -832,12 +832,7 @@ class RAGService:
                 print(f"\n--- Processing {trans_id} ---")
                 
                 # SWITCH to this translation (EXACTLY like single mode does)
-                translation_path = self.chroma_base_path / trans_id
-                self.vectorstore = Chroma(
-                    persist_directory=str(translation_path),
-                    embedding_function=self.embeddings
-                )
-                self.current_translation = trans_id
+                self.switch_translation(trans_id)
                 
                 # Call the EXACT SAME function that single mode uses WITH SAME k
                 chunks = self._retrieve_relevant_chunks(question, k=k)
