@@ -592,6 +592,9 @@ class RAGService:
         Retrieve relevant chunks using semantic search + smart filtering.
         k from widget is ignored for verse queries — smart k is used instead.
         """
+
+        print(f"  🔍 Using vectorstore persist_dir: {self.vectorstore._persist_directory}")
+
         if not self.vectorstore:
             return []
 
