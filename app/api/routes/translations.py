@@ -160,6 +160,26 @@ async def debug_filesystem():
     
     return debug_info
 
+@router.get("/debug-verse-test")
+async def debug_verse_test():
+    import chromadb
+    try:
+        client = chromadb.PersistentClient(path="chroma_db/KJV")
+        collection = client.get_collection("langchain")
+        
+        # Just get first 3 documents and show ALL metadata
+        results = collection.get(
+            limit=3,
+            include=["documents", "metadatas"]
+        )
+        
+        return {
+            "sample_metadata": results["metadatas"],
+            "sample_docs": [d[:120] for d in results["documents"]]
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @router.get("/debug-chroma")
 async def debug_chroma():
     """Debug ChromaDB folder structure"""

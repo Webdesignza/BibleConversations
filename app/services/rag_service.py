@@ -595,6 +595,7 @@ class RAGService:
         if not self.vectorstore:
             return []
 
+        print(f"  📊 Collection count: {self.vectorstore._collection.count()}")
         print(f"🔍 Searching for: '{query}'")
 
         # Extract verse reference if present
@@ -607,7 +608,8 @@ class RAGService:
         if verse_ref:
             print(f"  📍 Looking for: {verse_ref['book']} {verse_ref['chapter']}:{verse_ref['verse_start']}-{verse_ref['verse_end']}")
 
-            specific_query = f"{verse_ref['book']} {verse_ref['chapter']}:{verse_ref['verse_start']}"
+            # Match the exact stored text format
+            specific_query = f"{verse_ref['book'].capitalize()} {verse_ref['chapter']}:{verse_ref['verse_start']} -"
             search_k = 100  # Always cast wide net
 
             results = self.vectorstore.similarity_search_with_score(specific_query, k=search_k)
