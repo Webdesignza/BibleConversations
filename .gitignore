@@ -66,8 +66,8 @@ dmypy.json
 
 # Database - Translation vector data is committed to repo
 # Only exclude temporary/lock files
-#chroma_db/**/__pycache__/
-#chroma_db/**/*.lock
+chroma_db/**/__pycache__/
+chroma_db/**/*.lock
 
 # Uploads - Temporary files
 uploads/*
